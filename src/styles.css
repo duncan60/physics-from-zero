@@ -1,14 +1,1180 @@
+/* 從零開始學物理：全站樣式。
+   色彩都定義成 :root 的變數，深色模式只換變數的值。
+   公車與球的模擬（sims/BusBallSim.tsx）讀 --sim-primary、--sim-danger、--sim-ball，
+   它的按鈕是白字，所以 --sim-primary 和 --sim-danger 在兩種模式都要夠深（白字對比 ≥ 4.5）。 */
+
 :root {
+  color-scheme: light dark;
+
+  --bg: #f6f8f5;
+  --surface: #ffffff;
+  --surface-2: #edf2ec;
+  --text: #17251b;
+  --text-muted: #56655b;
+  --border: #d3ddd4; /* 裝飾用的分隔線 */
+  --border-strong: #7a8b7f; /* 輸入框、按鈕的框線（對比 ≥ 3） */
+
+  --primary: #15803d; /* 主色：綠。白字 5.0 */
+  --primary-strong: #0f5f2d; /* 按鈕底下的立體陰影 */
+  --primary-soft: #e3f5e8;
+  --primary-text: #13703a; /* 背景上的綠色文字 */
+  --on-primary: #ffffff;
+  --focus: #2563eb;
+
+  --correct: #13703a;
+  --correct-soft: #e6f6eb;
+  --correct-border: #2f9e5a;
+  --wrong: #9a3412; /* 答錯用溫和的橘色，不用刺眼的紅 */
+  --wrong-soft: #fff1e6;
+  --wrong-border: #c2410c;
+  --info: #1e4fb8; /* 看解答、引導 */
+  --info-soft: #eaf0fd;
+  --info-border: #4d6fd1;
+
+  --streak: #ea580c;
+  --xp: #ca8a04;
+  --path-line: #c9d5cc; /* 還沒走過的路線（點點） */
+  --path-done: #9fd3b0; /* 已經走過的路線 */
+
+  --sim-primary: var(--primary);
+  --sim-danger: #c62828;
+  --sim-ball: #ea580c;
+
+  --radius: 14px;
+  --content-width: 560px;
+  --gutter: 16px;
+
+  /* 勾、叉、完成徽章：用 mask 畫，顏色跟著 background-color（也就是上面的變數）走。 */
+  --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7l10 10M17 7L7 17' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  --icon-badge: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cpath fill-rule='evenodd' d='M48 0a48 48 0 1 0 0 96a48 48 0 1 0 0-96Z M25 50 L32 43 L42 53 L65 30 L72 37 L42 67 Z'/%3E%3C/svg%3E");
+
   font-family: system-ui, -apple-system, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-  line-height: 1.5;
-  color: #1f2937;
-  background-color: #ffffff;
+  font-size: 100%;
+  line-height: 1.6;
+  color: var(--text);
+  background-color: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
-* {
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1511;
+    --surface: #16201a;
+    --surface-2: #1d2a22;
+    --text: #e5eee8;
+    --text-muted: #a2b3a8;
+    --border: #2b3b31;
+    --border-strong: #5d7465;
+
+    --primary: #15803d;
+    --primary-strong: #0a4a22;
+    --primary-soft: #183a26;
+    --primary-text: #6ee09a;
+    --on-primary: #ffffff;
+    --focus: #8ab4ff;
+
+    --correct: #6ee09a;
+    --correct-soft: #15301f;
+    --correct-border: #3fb370;
+    --wrong: #ffb37a;
+    --wrong-soft: #3a2214;
+    --wrong-border: #d9773a;
+    --info: #a9c3ff;
+    --info-soft: #1a2440;
+    --info-border: #6b8fe0;
+
+    --streak: #fb923c;
+    --xp: #facc15;
+    --path-line: #3a5244;
+    --path-done: #2c6e45;
+
+    --sim-danger: #c62828;
+    --sim-ball: #fb923c;
+  }
+}
+
+/* ---- 基本 ---- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.3;
+}
+
+a {
+  color: var(--primary-text);
+  text-underline-offset: 3px;
+}
+
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* 程式移過去的焦點（換步驟時的容器）不畫外框 */
+.lp-stage:focus,
+.lp-guide-step:focus,
+.lp-complete:focus {
+  outline: none;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.container {
+  width: 100%;
+  max-width: calc(var(--content-width) + 2 * var(--gutter));
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.site-main {
+  flex: 1 0 auto;
+  padding-block: 8px 0;
+}
+
+/* ---- 按鈕 ---- */
+
+.button,
+.lp-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 10px 20px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 0 var(--border);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out,
+    filter 150ms ease-out;
+}
+
+.button--primary,
+.lp-button--primary {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 4px 0 var(--primary-strong);
+}
+
+.button:active,
+.lp-button:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.button--primary:active,
+.lp-button--primary:active {
+  box-shadow: 0 1px 0 var(--primary-strong);
+}
+
+@media (hover: hover) {
+  .button:hover,
+  .lp-button:hover {
+    filter: brightness(1.05);
+  }
+}
+
+/* ---- 頁首 ---- */
+
+.site-header {
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: 60px;
+  padding-block: 8px;
+}
+
+.site-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.1875rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.site-logo {
+  flex: none;
+}
+
+.stats {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 7px;
+  border-radius: 999px;
+  background-color: var(--surface-2);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stat svg {
+  flex: none;
+}
+
+.stat--streak svg {
+  color: var(--streak);
+}
+
+.stat--zero svg {
+  color: var(--text-muted);
+}
+
+.stat--xp svg {
+  color: var(--xp);
+}
+
+/* 窄螢幕：拿掉標誌、字小一點，網站名稱和連續天數、XP 才排得進同一行（排不下時 XP 那組會換到下一行靠右）。 */
+@media (max-width: 400px) {
+  .site-logo {
+    display: none;
+  }
+
+  .site-title {
+    font-size: 1.0625rem;
+  }
+
+  .stat {
+    padding-inline: 5px 8px;
+    font-size: 0.875rem;
+  }
+}
+
+/* ---- 頁尾 ---- */
+
+.site-footer {
+  margin-top: 48px;
+  padding-block: 20px 28px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.site-footer p {
+  margin: 0 0 4px;
+}
+
+.site-footer-credit {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.site-footer a {
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+.site-footer p:last-child a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* ---- 路線地圖 ---- */
+
+.map {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 20px;
+}
+
+.station:not(.station--soon) {
+  margin-bottom: 20px;
+}
+
+.station-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background-color: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 4px 0 var(--primary-strong);
+}
+
+.station-number {
+  font-size: 0.875rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.station-name {
+  font-size: 1.375rem;
+  font-weight: 800;
+}
+
+.station--soon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 2px dashed var(--border);
+  border-radius: 18px;
+}
+
+.station--soon .station-title {
+  padding: 0;
+  background: none;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.station--soon .station-name {
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.station-soon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 路線本身：寬度固定 280px（PathMap 設定），置中；SVG 曲線墊在圓圈後面。 */
+.path {
+  position: relative;
+  max-width: 100%;
+  margin: 20px auto 0;
+}
+
+.path-line {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.path-segment {
+  fill: none;
+  stroke: var(--path-line);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 16;
+}
+
+.path-segment--done {
+  stroke: var(--path-done);
+  stroke-width: 6;
+  stroke-dasharray: none;
+}
+
+.path-list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.path-step {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.path-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 18px;
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.path-node:focus-visible {
+  outline-offset: 4px;
+}
+
+/* 圓圈放在 80px 高的方框正中間（PathMap 的 NODE_CENTER_Y = 40）。 */
+.path-node-circle {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-block: 8px;
+  border: 3px solid var(--primary);
+  border-radius: 50%;
+  background-color: var(--surface);
+  color: var(--primary-text);
+  transition:
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.path-node-label {
+  margin-top: 2px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background-color: var(--bg); /* 蓋住後面的路線 */
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.path-node-id {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.path-node-status {
+  margin-top: 4px;
+  padding: 1px 10px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background-color: var(--bg);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 已完成：淺綠底、打勾 */
+.path-node--completed .path-node-circle {
+  background-color: var(--primary-soft);
+}
+
+.path-node--completed .path-node-status {
+  background-color: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+/* 目前這一課：比較大、實心、外圈有光暈、狀態是實心的「可以上」 */
+.path-node--current .path-node-circle {
+  width: 76px;
+  height: 76px;
+  margin-block: 2px;
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: var(--on-primary);
+  box-shadow:
+    0 4px 0 var(--primary-strong),
+    0 0 0 7px var(--primary-soft);
+}
+
+.path-node--current .path-node-circle svg {
+  width: 34px;
+  height: 34px;
+}
+
+.path-node--current .path-node-title {
+  font-size: 1.0625rem;
+}
+
+.path-node--current .path-node-status {
+  background-color: var(--primary);
+  color: var(--on-primary);
+}
+
+/* 已解鎖、但不是目前這一課（只有進度資料不連續時才會出現） */
+.path-node--available .path-node-status {
+  border-color: var(--primary);
+  color: var(--primary-text);
+}
+
+/* 鎖住：灰色、虛線框、鎖頭 */
+.path-node--locked .path-node-circle {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background-color: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.path-node--locked .path-node-title {
+  color: var(--text-muted);
+}
+
+.path-node--locked .path-node-status {
+  background-color: var(--surface-2);
+  color: var(--text-muted);
+}
+
+@media (hover: hover) {
+  a.path-node:hover .path-node-circle {
+    transform: translateY(-2px);
+  }
+}
+
+a.path-node:active .path-node-circle {
+  transform: translateY(2px);
+}
+
+@keyframes path-halo {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 0 var(--primary-strong),
+      0 0 0 7px var(--primary-soft);
+  }
+  50% {
+    box-shadow:
+      0 4px 0 var(--primary-strong),
+      0 0 0 12px var(--primary-soft);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .path-node--current .path-node-circle {
+    animation: path-halo 2.4s ease-in-out infinite;
+  }
+}
+
+/* ---- 找不到課程、還沒解鎖 ---- */
+
+.notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 0 16px;
+  text-align: center;
+}
+
+.notice-title {
+  max-width: 22em;
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* ---- 上課：外框、進度條 ---- */
+
+.lp-player {
+  padding-bottom: 8px;
+}
+
+/* 上課時「離開」和進度條固定在畫面上方，捲動時也看得到。 */
+.lp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding-block: 8px;
+  background-color: var(--bg);
+}
+
+/* 換步驟時焦點移到新的步驟，瀏覽器會把它捲進畫面；留出上方固定列的高度，不會被蓋住。 */
+.lp-stage,
+.lp-guide-step {
+  scroll-margin-top: 76px;
+}
+
+.lp-exit {
+  flex: none;
+  min-height: 44px;
+  padding: 6px 14px;
+  border-color: var(--border);
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.lp-exit:active {
+  box-shadow: none;
+}
+
+.lp-progress {
+  flex: 1;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.lp-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--primary);
+  transition: width 350ms ease-out;
+}
+
+.lp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+  padding-bottom: 4px; /* 按鈕的立體陰影 */
+}
+
+.lp-actions > .lp-button {
+  flex: 1 1 140px;
+}
+
+/* ---- 觀念卡、模擬 ---- */
+
+.lp-concept-title {
+  margin: 0 0 12px;
+  font-size: 1.375rem;
+  font-weight: 800;
+}
+
+.lp-concept-text {
+  margin: 0 0 10px;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+.lp-prompt,
+.lp-sim-prompt {
+  margin: 0 0 16px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.lp-sim > [role='group'] {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background-color: var(--surface);
+}
+
+/* ---- 選擇題 ---- */
+
+.lp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lp-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  box-shadow: 0 3px 0 var(--border);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lp-option:has(.lp-option-input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.lp-option:has(.lp-option-input:disabled) {
+  cursor: default;
+}
+
+.lp-option-input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.lp-option-input:disabled {
+  opacity: 1;
+}
+
+.lp-option-label {
+  flex: 1;
+}
+
+@media (hover: hover) {
+  .lp-card--answering .lp-option:hover {
+    border-color: var(--primary);
+  }
+}
+
+.lp-option--selected {
+  border-color: var(--primary);
+  background-color: var(--primary-soft);
+  box-shadow: 0 3px 0 var(--primary);
+}
+
+/* 對、錯除了顏色，還有勾或叉，答錯的框線是虛線 */
+.lp-option--correct,
+.lp-option--wrong {
+  border-width: 3px;
+}
+
+.lp-option--correct {
+  border-color: var(--correct-border);
+  background-color: var(--correct-soft);
+  box-shadow: 0 3px 0 var(--correct-border);
+}
+
+.lp-option--wrong {
+  border-style: dashed;
+  border-color: var(--wrong-border);
+  background-color: var(--wrong-soft);
+  box-shadow: none;
+}
+
+.lp-option--correct::after,
+.lp-option--wrong::after {
+  content: '';
+  flex: none;
+  width: 24px;
+  height: 24px;
+  -webkit-mask: var(--icon-check) center / contain no-repeat;
+  mask: var(--icon-check) center / contain no-repeat;
+  background-color: var(--correct);
+}
+
+.lp-option--wrong::after {
+  -webkit-mask-image: var(--icon-cross);
+  mask-image: var(--icon-cross);
+  background-color: var(--wrong);
+}
+
+/* ---- 數字題 ---- */
+
+.lp-number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.lp-sign {
+  appearance: none;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: 12px;
+  background-color: var(--surface);
+  color: var(--text);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lp-sign:active {
+  background-color: var(--surface-2);
+}
+
+.lp-sign:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.lp-number-input,
+.lp-cell-input {
+  appearance: none;
+  min-height: 48px;
+  margin: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: 12px;
+  background-color: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.375rem; /* 至少 16px，iPhone 才不會自動放大 */
+  font-weight: 600;
+}
+
+.lp-number-input {
+  width: 6em;
+  max-width: calc(100% - 58px);
+  padding: 6px 12px;
+}
+
+.lp-number-input:focus,
+.lp-cell-input:focus {
+  border-color: var(--primary);
+}
+
+.lp-number-input:disabled,
+.lp-cell-input:disabled {
+  opacity: 1;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text); /* Safari 會把停用的輸入框文字變淡 */
+}
+
+.lp-number-input[aria-invalid='true'] {
+  border-color: var(--wrong-border);
+}
+
+.lp-unit {
+  color: var(--text-muted);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.lp-number--correct .lp-number-input {
+  border-width: 3px;
+  border-color: var(--correct-border);
+  background-color: var(--correct-soft);
+}
+
+.lp-number--wrong .lp-number-input {
+  border-width: 3px;
+  border-style: dashed;
+  border-color: var(--wrong-border);
+  background-color: var(--wrong-soft);
+}
+
+/* ---- 表格題 ---- */
+
+.lp-table-wrap {
+  max-width: 100%;
+  padding-bottom: 4px;
+}
+
+.lp-table {
+  margin-inline: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 1rem;
+}
+
+.lp-table th,
+.lp-table td {
+  padding: 4px 3px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.lp-table tr > :first-child {
+  border-left: 1px solid var(--border);
+}
+
+.lp-table thead th,
+.lp-table thead td {
+  border-top: 1px solid var(--border);
+}
+
+.lp-table thead tr > :first-child {
+  border-top-left-radius: 12px;
+}
+
+.lp-table thead tr > :last-child {
+  border-top-right-radius: 12px;
+}
+
+.lp-table tbody tr:last-child > :first-child {
+  border-bottom-left-radius: 12px;
+}
+
+.lp-table tbody tr:last-child > :last-child {
+  border-bottom-right-radius: 12px;
+}
+
+.lp-table th {
+  background-color: var(--surface-2);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.lp-table th[scope='col'] {
+  white-space: nowrap;
+}
+
+.lp-table th[scope='row'] {
+  min-width: 4em;
+  max-width: 5.5em;
+  padding-inline: 6px;
+  line-height: 1.35;
+}
+
+.lp-table-corner {
+  background-color: var(--surface-2);
+}
+
+.lp-cell {
+  min-width: 2.75em;
+  background-color: var(--surface);
+  font-weight: 600;
+}
+
+.lp-cell-input {
+  width: 2.3em;
+  min-height: 44px;
+  padding: 4px 2px;
+  border-radius: 8px;
+  font-size: 1rem;
+  text-align: center;
+}
+
+@media (min-width: 420px) {
+  .lp-cell-input {
+    width: 2.9em;
+  }
+
+  .lp-table th,
+  .lp-table td {
+    padding-inline: 5px;
+  }
+}
+
+.lp-cell--correct .lp-cell-input {
+  border-width: 3px;
+  border-color: var(--correct-border);
+  background-color: var(--correct-soft);
+}
+
+.lp-cell--wrong .lp-cell-input {
+  border-width: 3px;
+  border-style: dashed;
+  border-color: var(--wrong-border);
+  background-color: var(--wrong-soft);
+}
+
+.lp-cell--revealed {
+  background-color: var(--info-soft);
+  color: var(--info);
+  font-weight: 800;
+}
+
+/* ---- 提示、回饋 ---- */
+
+/* 這兩個是 role="status" 的即時區域，空的時候也要留在畫面上（不可以 display: none），只是不佔空間。 */
+.lp-hint {
+  margin: 10px 0 0;
+  color: var(--wrong);
+  font-weight: 700;
+}
+
+.lp-hint:empty {
+  margin: 0;
+}
+
+.lp-feedback {
+  margin: 0;
+}
+
+.lp-feedback--correct,
+.lp-feedback--wrong,
+.lp-feedback--revealed {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 2px solid;
+  border-left-width: 6px;
+  border-radius: var(--radius);
+}
+
+.lp-feedback--correct {
+  border-color: var(--correct-border);
+  background-color: var(--correct-soft);
+}
+
+.lp-feedback--wrong {
+  border-color: var(--wrong-border);
+  background-color: var(--wrong-soft);
+}
+
+.lp-feedback--revealed {
+  border-color: var(--info-border);
+  background-color: var(--info-soft);
+}
+
+.lp-feedback-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.lp-feedback--correct .lp-feedback-title {
+  color: var(--correct);
+}
+
+.lp-feedback--correct .lp-feedback-title::before {
+  content: '';
+  flex: none;
+  width: 22px;
+  height: 22px;
+  -webkit-mask: var(--icon-check) center / contain no-repeat;
+  mask: var(--icon-check) center / contain no-repeat;
+  background-color: currentColor;
+}
+
+.lp-feedback--wrong .lp-feedback-title {
+  color: var(--wrong);
+}
+
+.lp-feedback--revealed .lp-feedback-title {
+  color: var(--info);
+}
+
+.lp-feedback-text,
+.lp-explanation,
+.lp-solution {
+  margin: 6px 0 0;
+  line-height: 1.7;
+}
+
+.lp-solution {
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+/* ---- 一步一步來（引導） ---- */
+
+.lp-guide {
+  padding-left: 14px;
+  border-left: 4px solid var(--info-border);
+}
+
+.lp-guide::before {
+  content: '一步一步來';
+  content: '一步一步來' / ''; /* 區域本身已經有 aria-label，螢幕閱讀器不必再念一次 */
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background-color: var(--info-soft);
+  color: var(--info);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* ---- 完成畫面 ---- */
+
+.lp-complete {
+  padding: 32px 0 8px;
+  text-align: center;
+}
+
+.lp-complete::before {
+  content: '';
+  display: block;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 20px;
+  -webkit-mask: var(--icon-badge) center / contain no-repeat;
+  mask: var(--icon-badge) center / contain no-repeat;
+  background-color: var(--primary);
+}
+
+.lp-complete-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.lp-complete-xp {
+  display: inline-block;
+  margin: 14px 0 8px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  background-color: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.lp-complete .lp-actions {
+  justify-content: center;
+}
+
+.lp-complete .lp-actions > .lp-button {
+  flex: 0 1 280px;
+}
+
+@keyframes pop-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-complete::before {
+    animation: pop-in 360ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  }
+}
+
+/* ---- 減少動態效果：關掉所有轉場和動畫 ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
