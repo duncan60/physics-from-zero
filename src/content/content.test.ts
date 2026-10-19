@@ -69,6 +69,14 @@ it('findLesson 用 id 找到課程，找不到時回傳 undefined', () => {
   expect(findLesson('')).toBeUndefined();
 });
 
+it('1-1 的公車與球模擬緊接在急煞車題之後，讓學習者動手驗證兩題', () => {
+  const steps = findLesson('1-1')?.steps ?? [];
+  const brakeIndex = steps.findIndex((s) => s.id === 'brake');
+  expect(brakeIndex).toBeGreaterThan(0);
+  expect(steps.filter((s) => s.kind === 'sim')).toHaveLength(1);
+  expect(steps[brakeIndex + 1]?.kind).toBe('sim');
+});
+
 describe.each(lessons.map((l) => [l.id, l] as const))('課程 %s', (_id, lesson) => {
   it('5 到 8 個步驟', () => {
     expect(lesson.steps.length).toBeGreaterThanOrEqual(5);

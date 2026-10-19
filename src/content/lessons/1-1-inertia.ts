@@ -27,12 +27,6 @@ export const inertia: Lesson = {
       explanation: '球離手時，本來就跟著公車每秒往前 10 公尺。公車速度不變，球和你一直往前跑得一樣快，所以球落回手上。',
     },
     {
-      kind: 'sim',
-      id: 'sim-bus-ball',
-      sim: 'bus-ball',
-      prompt: '動手試試看：按「丟球」，看看球落在哪裡，和你的答案一樣嗎？「急煞車」先別按，下一題要請你先猜猜看。',
-    },
-    {
       kind: 'choice',
       id: 'brake',
       prompt: '同一台公車，每秒往前開 10 公尺。你把球往正上方丟，球還在空中時，公車突然急煞車。球會落在哪裡？',
@@ -87,6 +81,12 @@ export const inertia: Lesson = {
           ],
         },
       ],
+    },
+    {
+      kind: 'sim',
+      id: 'sim-bus-ball',
+      sim: 'bus-ball',
+      prompt: '動手驗證你的兩個答案。先只按「丟球」，看球落在哪裡。接著按「重來」，再按「丟球」，趁球還在空中時按「急煞車」，看這次球落在哪裡。',
     },
     {
       kind: 'concept',
