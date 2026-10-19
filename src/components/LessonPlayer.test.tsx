@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Lesson } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
 
@@ -65,6 +65,36 @@ const tableLesson: Lesson = {
   ],
 };
 
+/** 兩張觀念卡 → 選擇題：測連點。 */
+const conceptsLesson: Lesson = {
+  id: 'test-concepts',
+  title: '測試連點',
+  steps: [
+    { kind: 'concept', id: 'c1', body: ['第一張卡。'] },
+    { kind: 'concept', id: 'c2', body: ['第二張卡。'] },
+    {
+      kind: 'choice',
+      id: 'pick-one',
+      prompt: '選一個',
+      options: [
+        { id: 'a', label: '甲' },
+        { id: 'b', label: '乙' },
+      ],
+      answer: 'a',
+      explanation: '甲才對。',
+    },
+  ],
+};
+
+/** 答案是負數的數字題。 */
+const negativeLesson: Lesson = {
+  id: 'test-negative',
+  title: '測試負數',
+  steps: [
+    { kind: 'number', id: 'down', prompt: '往下的速度是多少？', answer: -10, unit: '公尺/秒', explanation: '往下記為負，所以是 −10 公尺/秒。' },
+  ],
+};
+
 const simLesson: Lesson = {
   id: 'test-sim',
   title: '測試模擬',
@@ -74,18 +104,37 @@ const simLesson: Lesson = {
   ],
 };
 
+// 按鈕在畫面換了之後的一小段時間內不會有反應（防連點，約 400 ms），所以測試用假的時鐘：
+// `user` 每個動作的前後都會等 SETTLE_MS，像一般人一樣按；`fast` 完全不等，用來模擬連點。
+const SETTLE_MS = 500;
+
 function renderPlayer(lesson: Lesson) {
   const onComplete = vi.fn();
   const onExit = vi.fn();
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: SETTLE_MS, advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+  const fast = userEvent.setup({ delay: null });
   render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} />);
-  return { user, onComplete, onExit };
+  return { user, fast, onComplete, onExit };
+}
+
+/** 讓時間經過，等過防連點的時間。 */
+function settle(): void {
+  act(() => {
+    vi.advanceTimersByTime(SETTLE_MS);
+  });
 }
 
 const button = (name: string) => screen.getByRole('button', { name });
 const queryButton = (name: string) => screen.queryByRole('button', { name });
 
+beforeEach(() => {
+  // shouldAdvanceTime：Testing Library 每個動作結束時會等一個 setTimeout(0)，假的時鐘也要跟著真實時間走才不會卡住。
+  // 連點的兩下之間只過幾毫秒的真實時間，遠小於防連點的時間。
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   Reflect.deleteProperty(window, 'matchMedia');
 });
 
@@ -159,6 +208,7 @@ it('沒有輸入就按檢查，會出現提示，而且不算答錯', async () =
   // 數字題：空白、看不懂的輸入都只會提示
   const input = screen.getByRole('textbox', { name: '3 減 0 是多少？' });
   expect(input).toHaveAttribute('inputmode', 'decimal');
+  expect(button('切換正負號')).toBeInTheDocument(); // 答案是正數也有，才不會洩漏答案的正負
   await user.click(button('檢查'));
   expect(screen.getByText('請先輸入數字')).toBeInTheDocument();
   expect(input).toBeInvalid();
@@ -322,4 +372,117 @@ it('模擬步驟：顯示說明和模擬，按「繼續」往下', async () => {
   expect(screen.getByRole('group', { name: '公車與球的模擬' })).toBeInTheDocument();
   await user.click(button('繼續'));
   expect(screen.getByText('模擬之後的觀念卡。')).toBeInTheDocument();
+});
+
+it('連點「檢查」：答錯時「還不對」和回饋留在畫面上，不會直接進入引導', async () => {
+  const { user, fast } = renderPlayer(guidedLesson);
+  await user.click(button('繼續'));
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+
+  await fast.dblClick(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText('最後一步再看一次')).toBeInTheDocument();
+  expect(screen.queryByText('2 + 2 是多少？')).not.toBeInTheDocument();
+
+  // 過了防連點的時間，按鈕照常有反應
+  await user.click(button('一步一步來'));
+  expect(screen.getByText('2 + 2 是多少？')).toBeInTheDocument();
+});
+
+it('連點「檢查」：答對時「答對了」和說明留在畫面上', async () => {
+  const { user, fast } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+
+  await fast.dblClick(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(screen.getByText('A 就是 A。')).toBeInTheDocument();
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+});
+
+it('連點「繼續」只會往前一步，下一題的「檢查」也不會被按到', async () => {
+  const { fast } = renderPlayer(conceptsLesson);
+  settle();
+
+  // 連點的第二下會落在同一個位置新出現的按鈕上，所以每一下都重新找按鈕。
+  await fast.click(button('繼續'));
+  await fast.click(button('繼續'));
+  expect(screen.getByText('第二張卡。')).toBeInTheDocument();
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
+
+  settle();
+  await fast.click(button('繼續'));
+  await fast.click(button('檢查'));
+  expect(screen.getByText('選一個')).toBeInTheDocument();
+  expect(screen.queryByText('請先選一個答案')).not.toBeInTheDocument();
+
+  settle();
+  await fast.click(button('檢查'));
+  expect(screen.getByText('請先選一個答案')).toBeInTheDocument();
+});
+
+it('過了防連點的時間，鍵盤 Enter 照常有用', async () => {
+  const { user, fast } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await fast.click(button('檢查')); // 用 fast：按完不等，下一個動作還在防連點的時間內
+  expect(button('繼續')).toHaveFocus();
+
+  await fast.keyboard('{Enter}'); // 剛換成「繼續」，還在防連點的時間內：不算
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.keyboard('{Enter}'); // 等過之後就有用
+  const input = screen.getByRole('textbox', { name: '3 減 0 是多少？' });
+
+  await user.type(input, '3');
+  await user.keyboard('{Enter}'); // 在輸入框按 Enter 就是「檢查」
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(button('繼續')).toHaveFocus();
+  await user.keyboard('{Enter}');
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+});
+
+it('數字題的「±」切換正負號：答案是負數也能輸入', async () => {
+  const { user, onComplete } = renderPlayer(negativeLesson);
+  const input = screen.getByRole('textbox', { name: '往下的速度是多少？' });
+  const sign = button('切換正負號');
+  expect(sign).toHaveTextContent('±');
+  expect(sign).toHaveStyle({ minHeight: '44px' });
+
+  await user.type(input, '10');
+  await user.click(sign);
+  expect(input).toHaveValue('-10');
+  expect(input).toHaveFocus();
+  await user.click(sign);
+  expect(input).toHaveValue('10'); // 按兩次回到原本的值
+  await user.click(sign);
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+  await user.click(button('回到地圖'));
+  expect(onComplete).toHaveBeenCalledWith(15);
+});
+
+it('「±」：空白時先放負號，接著打的數字接在後面；也認得數學負號和全形負號', async () => {
+  const { user } = renderPlayer(negativeLesson);
+  const input = screen.getByRole('textbox');
+  const sign = button('切換正負號');
+
+  await user.click(sign);
+  expect(input).toHaveValue('-');
+  expect(input).toHaveFocus();
+  await user.keyboard('10');
+  expect(input).toHaveValue('-10');
+
+  await user.clear(input);
+  await user.type(input, '−5'); // U+2212
+  await user.click(sign);
+  expect(input).toHaveValue('5');
+
+  await user.clear(input);
+  await user.type(input, '－5'); // 全形
+  await user.click(sign);
+  expect(input).toHaveValue('5');
+
+  await user.clear(input);
+  await user.click(sign);
+  await user.click(sign);
+  expect(input).toHaveValue('');
 });

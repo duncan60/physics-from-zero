@@ -110,6 +110,17 @@ describe.each(lessons.map((l) => [l.id, l] as const))('課程 %s', (_id, lesson)
     }
   });
 
+  // 表格的空格是 inputMode="decimal" 的輸入框，iPhone 的小數鍵盤沒有負號鍵，學習者打不出負數。
+  // 答案需要負數時改用數字題（數字題旁邊有「±」按鈕）；給定的格子（字串）可以是負數。
+  it('表格空格的答案都不是負數', () => {
+    for (const s of allQuestions(lesson)) {
+      if (s.kind !== 'table') continue;
+      for (const blank of blankCells(s)) {
+        expect(blank.answer, `${s.id}：第 ${blank.row + 1} 列第 ${blank.col + 1} 格的答案是負數`).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
   it('不會教「負號就代表減速」', () => {
     expect(JSON.stringify(lesson)).not.toMatch(/負號就?代表減速/);
   });

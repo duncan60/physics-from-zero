@@ -5,6 +5,7 @@ import type { QuestionStep } from '../lib/types';
 import { ChoiceInput } from './steps/ChoiceInput';
 import { NumberInput, formatNumber } from './steps/NumberInput';
 import { TableInput } from './steps/TableInput';
+import { useActionGuard } from './useActionGuard';
 
 // answering：作答中；correct：答對了；wrong：還不對；revealed：看了解答。
 type Phase = 'answering' | 'correct' | 'wrong' | 'revealed';
@@ -48,6 +49,8 @@ export function QuestionCard(props: {
   const [retries, setRetries] = useState(0);
   const answerRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
+  // 每換一個階段（剛出現、檢查後、再試一次），按鈕都先等一下才有反應，連點不會跳過回饋。
+  const guard = useActionGuard(phase);
 
   const answering = phase === 'answering';
   const requestGuide = step.guide !== undefined && step.guide.length > 0 ? onRequestGuide : undefined;
@@ -208,12 +211,12 @@ export function QuestionCard(props: {
         )}
       </div>
       <div className="lp-actions">
-        {/* 同一顆按鈕依階段換文字，焦點留在原處，按 Enter 或空白鍵就能一路往下。 */}
-        <button ref={primaryRef} type="button" className="lp-button lp-button--primary" onClick={() => primary.action()}>
+        {/* 同一顆按鈕依階段換文字，焦點留在原處，按 Enter 或空白鍵就能一路往下（每換一次階段先等 ACTION_GUARD_MS）。 */}
+        <button ref={primaryRef} type="button" className="lp-button lp-button--primary" onClick={guard(() => primary.action())}>
           {primary.label}
         </button>
         {phase === 'wrong' && (
-          <button type="button" className="lp-button lp-button--secondary" onClick={() => setPhase('revealed')}>
+          <button type="button" className="lp-button lp-button--secondary" onClick={guard(() => setPhase('revealed'))}>
             看解答
           </button>
         )}

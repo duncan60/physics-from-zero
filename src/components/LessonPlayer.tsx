@@ -5,6 +5,7 @@ import { BusBallSim } from '../sims/BusBallSim';
 import { GuideRunner } from './GuideRunner';
 import { QuestionCard } from './QuestionCard';
 import { ConceptView } from './steps/ConceptView';
+import { useActionGuard } from './useActionGuard';
 
 interface Props {
   lesson: Lesson;
@@ -27,12 +28,13 @@ function renderSim(sim: SimStep['sim']): React.JSX.Element {
 
 function SimView(props: { step: SimStep; onContinue: () => void }): React.JSX.Element {
   const { step, onContinue } = props;
+  const guard = useActionGuard();
   return (
     <section className="lp-sim">
       <p className="lp-sim-prompt">{step.prompt}</p>
       {renderSim(step.sim)}
       <div className="lp-actions">
-        <button type="button" className="lp-button lp-button--primary" onClick={onContinue}>
+        <button type="button" className="lp-button lp-button--primary" onClick={guard(onContinue)}>
           繼續
         </button>
       </div>
@@ -58,6 +60,8 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
   const [guided, setGuided] = useState(false);
   const [firstTryCount, setFirstTryCount] = useState(0);
   const reported = useRef(false);
+  // 完成畫面的「回到地圖」：最後一題連點「繼續」時，不會一路按出這一課。
+  const guard = useActionGuard(index);
 
   const total = lesson.steps.length;
   const step = lesson.steps[index] as Step | undefined;
@@ -98,7 +102,7 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
           <h2 className="lp-complete-title">完成這一課</h2>
           <p className="lp-complete-xp">{`本課獲得 ${xp} XP`}</p>
           <div className="lp-actions">
-            <button type="button" className="lp-button lp-button--primary" onClick={finishLesson}>
+            <button type="button" className="lp-button lp-button--primary" onClick={guard(finishLesson)}>
               回到地圖
             </button>
           </div>
