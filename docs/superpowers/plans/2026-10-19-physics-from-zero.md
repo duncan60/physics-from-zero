@@ -234,7 +234,7 @@ Expected: FAIL（模組不存在）
 
 - [ ] **Step 3：實作 `types.ts` 和 `answer.ts`**
 
-`parseNumberInput`：先把全形數字、全形句點「．」、全形加號、全形負號「－」、U+2212「−」轉成半形，去掉前後空白，再用 `/^[+-]?\d+(\.\d+)?$/` 檢查，最後用 `Number()` 轉換。比較數字時使用 `Math.abs(value - answer) <= tolerance`，`tolerance` 預設是 `1e-9`。
+`parseNumberInput`：先把全形數字、全形句點「．」、全形加號、全形負號「－」、U+2212「−」轉成半形，去掉前後空白，再用 `/^[+-]?\d+(\.\d+)?$/` 檢查，最後用 `Number()` 轉換。比較數字時使用 `Math.abs(value - answer) <= tolerance + 1e-9`（多留 1e-9 吸收浮點誤差，讓容許範圍的兩端都算對），`tolerance` 預設是 0。
 
 - [ ] **Step 4：執行，確認通過**
 
