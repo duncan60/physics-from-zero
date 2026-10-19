@@ -1,0 +1,146 @@
+import { useRef, useState } from 'react';
+import { XP_PER_FIRST_TRY, XP_PER_LESSON } from '../lib/progress';
+import type { Lesson, SimStep, Step } from '../lib/types';
+import { BusBallSim } from '../sims/BusBallSim';
+import { GuideRunner } from './GuideRunner';
+import { QuestionCard } from './QuestionCard';
+import { ConceptView } from './steps/ConceptView';
+
+interface Props {
+  lesson: Lesson;
+  onComplete: (xpGained: number) => void;
+  onExit: () => void;
+}
+
+/** 換步驟時把焦點移到新的步驟上，鍵盤和螢幕閱讀器使用者不會停在已經消失的按鈕上。 */
+function focusOnMount(element: HTMLElement | null): void {
+  element?.focus();
+}
+
+// 新增一種模擬時，這裡少了 case 就會編譯失敗。
+function renderSim(sim: SimStep['sim']): React.JSX.Element {
+  switch (sim) {
+    case 'bus-ball':
+      return <BusBallSim />;
+  }
+}
+
+function SimView(props: { step: SimStep; onContinue: () => void }): React.JSX.Element {
+  const { step, onContinue } = props;
+  return (
+    <section className="lp-sim">
+      <p className="lp-sim-prompt">{step.prompt}</p>
+      {renderSim(step.sim)}
+      <div className="lp-actions">
+        <button type="button" className="lp-button lp-button--primary" onClick={onContinue}>
+          繼續
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 一課的流程：一次一個步驟，上方是「離開」和進度條，最後是完成畫面。
+ * XP：每一題第一次就答對（沒有用引導、沒有看解答）得 XP_PER_FIRST_TRY，完成一課再加 XP_PER_LESSON。
+ */
+export function LessonPlayer(props: Props): React.JSX.Element {
+  // 換了一課就整個重新開始，不會把上一課的進度帶過來。
+  return <LessonRun key={props.lesson.id} {...props} />;
+}
+
+function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
+  const [index, setIndex] = useState(0);
+  const [inGuide, setInGuide] = useState(false);
+  // 每從引導回到原題一次就加一，讓原題用新的 key 重新掛載，重新作答。
+  const [attempt, setAttempt] = useState(0);
+  // 這一題用過引導，就不是第一次就答對。
+  const [guided, setGuided] = useState(false);
+  const [firstTryCount, setFirstTryCount] = useState(0);
+  const reported = useRef(false);
+
+  const total = lesson.steps.length;
+  const step = lesson.steps[index] as Step | undefined;
+  const xp = XP_PER_LESSON + firstTryCount * XP_PER_FIRST_TRY;
+
+  function advance(): void {
+    setIndex((i) => i + 1);
+    setInGuide(false);
+    setAttempt(0);
+    setGuided(false);
+  }
+
+  function finishQuestion(cleanFirstTry: boolean): void {
+    if (cleanFirstTry && !guided) setFirstTryCount((n) => n + 1);
+    advance();
+  }
+
+  function startGuide(): void {
+    setGuided(true);
+    setInGuide(true);
+  }
+
+  function finishGuide(): void {
+    setInGuide(false);
+    setAttempt((n) => n + 1);
+  }
+
+  function finishLesson(): void {
+    if (reported.current) return; // 連按兩下也只算一次
+    reported.current = true;
+    onComplete(xp);
+  }
+
+  if (step === undefined) {
+    return (
+      <section className="lp-player" aria-label={lesson.title}>
+        <div ref={focusOnMount} tabIndex={-1} className="lp-stage lp-complete">
+          <h2 className="lp-complete-title">完成這一課</h2>
+          <p className="lp-complete-xp">{`本課獲得 ${xp} XP`}</p>
+          <div className="lp-actions">
+            <button type="button" className="lp-button lp-button--primary" onClick={finishLesson}>
+              回到地圖
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderStep(current: Step): React.JSX.Element {
+    switch (current.kind) {
+      case 'concept':
+        return <ConceptView step={current} onContinue={advance} />;
+      case 'sim':
+        return <SimView step={current} onContinue={advance} />;
+      case 'choice':
+      case 'number':
+      case 'table':
+        if (inGuide) return <GuideRunner steps={current.guide ?? []} onDone={finishGuide} />;
+        return <QuestionCard step={current} onFinish={finishQuestion} onRequestGuide={startGuide} />;
+    }
+  }
+
+  return (
+    <section className="lp-player" aria-label={lesson.title}>
+      <div className="lp-topbar">
+        <button type="button" className="lp-button lp-exit" onClick={onExit}>
+          離開
+        </button>
+        <div
+          className="lp-progress"
+          role="progressbar"
+          aria-label="課程進度"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={index}
+        >
+          <div className="lp-progress-fill" style={{ width: `${(index / total) * 100}%` }} />
+        </div>
+      </div>
+      <div key={`${index}-${inGuide ? 'guide' : attempt}`} ref={focusOnMount} tabIndex={-1} className="lp-stage">
+        {renderStep(step)}
+      </div>
+    </section>
+  );
+}
