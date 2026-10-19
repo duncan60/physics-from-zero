@@ -2,7 +2,8 @@ import type { ChoiceStep, NumberStep, TableStep } from './types';
 
 export type CheckResult = { correct: true } | { correct: false; feedback?: string };
 
-const DEFAULT_TOLERANCE = 1e-9;
+// 浮點誤差的緩衝：避免 |9.6 - 9.8| 算成 0.20000000000000107 而在邊界上被判錯。
+const EPSILON = 1e-9;
 
 /** 把全形數字、句點、正負號轉成半形（U+2212「−」也視為負號）。 */
 function toHalfWidth(raw: string): string {
@@ -20,8 +21,8 @@ export function parseNumberInput(raw: string): number | null {
   return Number(text);
 }
 
-function isClose(value: number, answer: number, tolerance: number = DEFAULT_TOLERANCE): boolean {
-  return Math.abs(value - answer) <= tolerance;
+function isClose(value: number, answer: number, tolerance = 0): boolean {
+  return Math.abs(value - answer) <= tolerance + EPSILON;
 }
 
 export function checkChoice(step: ChoiceStep, optionId: string): CheckResult {
@@ -44,7 +45,7 @@ export function blankCells(step: TableStep): { row: number; col: number; answer:
   step.rows.forEach((row, rowIndex) => {
     row.cells.forEach((cell, colIndex) => {
       if (typeof cell === 'string') return;
-      blanks.push({ row: rowIndex, col: colIndex, answer: cell.answer, tolerance: cell.tolerance ?? DEFAULT_TOLERANCE });
+      blanks.push({ row: rowIndex, col: colIndex, answer: cell.answer, tolerance: cell.tolerance ?? 0 });
     });
   });
   return blanks;

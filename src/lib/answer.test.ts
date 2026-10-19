@@ -16,6 +16,17 @@ describe('checkNumber', () => {
   it('其他錯誤沒有回饋', () => expect(checkNumber(step, '5')).toEqual({ correct: false }));
   it('空白或無法解析的輸入回傳 invalid', () => expect(checkNumber(step, '')).toBe('invalid'));
   it('容許誤差', () => expect(checkNumber({ ...step, answer: 9.8, tolerance: 0.2 }, '10')).toEqual({ correct: true }));
+  it('容許誤差的兩端都算對（1 ± 0.1）', () => {
+    const s = { ...step, answer: 1, tolerance: 0.1 };
+    expect(checkNumber(s, '0.9')).toEqual({ correct: true });
+    expect(checkNumber(s, '1.1')).toEqual({ correct: true });
+  });
+  it('容許誤差的兩端都算對（9.8 ± 0.2），超出就錯', () => {
+    const s = { ...step, answer: 9.8, tolerance: 0.2 };
+    expect(checkNumber(s, '9.6')).toEqual({ correct: true });
+    expect(checkNumber(s, '10')).toEqual({ correct: true });
+    expect(checkNumber(s, '9.5')).toEqual({ correct: false });
+  });
 });
 
 describe('checkChoice', () => {
@@ -28,6 +39,11 @@ describe('checkTable', () => {
   const step: TableStep = { kind: 'table', id: 't', prompt: '', explanation: '', columns: ['0 秒', '1 秒', '2 秒'], rows: [{ label: '速度', cells: ['10', { answer: 8 }, { answer: 6 }] }] };
   it('列出空格', () => expect(blankCells(step).map((c) => c.col)).toEqual([1, 2]));
   it('全對', () => expect(checkTable(step, ['8', '6'])).toEqual({ result: { correct: true }, cellCorrect: [true, true] }));
+  it('表格空格的容許誤差兩端都算對', () => {
+    const tol: TableStep = { ...step, rows: [{ label: '速度', cells: [{ answer: 4.8, tolerance: 0.1 }] }], columns: ['1 秒'] };
+    expect(checkTable(tol, ['4.9'])).toEqual({ result: { correct: true }, cellCorrect: [true] });
+    expect(checkTable(tol, ['4.7'])).toEqual({ result: { correct: true }, cellCorrect: [true] });
+  });
   it('部分錯', () => expect(checkTable(step, ['6', '6'])).toEqual({ result: { correct: false }, cellCorrect: [false, true] }));
   it('有空格沒填就是 invalid', () => expect(checkTable(step, ['8', ''])).toBe('invalid'));
 });
