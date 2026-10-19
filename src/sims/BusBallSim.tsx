@@ -26,6 +26,7 @@ const TRAIL_STEP = 0.05; // 球的軌跡每 0.05 秒取一點
 
 // ---- 時間 ----
 const MAX_FRAME = 0.1; // 分頁在背景時 rAF 會暫停，回來後一格最多前進 0.1 秒，才不會跳過丟球的過程
+const SLOW_SCALE = 0.25; // 「慢動作」開啟時，模擬時鐘走真實時間的 0.25 倍；只動時鐘，物理數字和結果都不變
 
 // ---- 顏色：用 currentColor 或 CSS 變數（附預設值），淺色、深色模式都看得清楚 ----
 const BALL_COLOR = 'var(--sim-ball, #ea580c)';
@@ -98,18 +99,21 @@ function buttonStyle(kind: 'primary' | 'danger' | 'plain', disabled: boolean): C
 export function BusBallSim(): React.JSX.Element {
   const reduced = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
   const [run, setRun] = useState<Run>(START);
+  const [slow, setSlow] = useState(false);
   const { t, throwAt, brakeAt } = run;
 
   const resultText = throwAt !== null && t >= throwAt + FLIGHT_TIME ? landingText(landingOffset(throwAt, brakeAt)) : '';
   const landed = resultText !== '';
 
-  // 動畫：時鐘從 0 開始，以真實時間（秒）前進；球落地就停。
+  // 動畫：時鐘從 0 開始，預設以真實時間（秒）前進，「慢動作」時走 0.25 倍；球落地就停。
+  // 時鐘 t 存在 state 裡，所以飛行途中切換慢動作只是換一個走時速度，不會動到其他狀態。
   useEffect(() => {
     if (reduced || landed) return;
+    const scale = slow ? SLOW_SCALE : 1;
     let frame = 0;
     let last: number | null = null;
     const step = (now: number): void => {
-      const dt = last === null ? 0 : Math.min((now - last) / 1000, MAX_FRAME);
+      const dt = last === null ? 0 : Math.min((now - last) / 1000, MAX_FRAME) * scale;
       last = now;
       setRun((r) => {
         const limit = r.throwAt === null ? Infinity : r.throwAt + FLIGHT_TIME;
@@ -119,7 +123,7 @@ export function BusBallSim(): React.JSX.Element {
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [reduced, landed]);
+  }, [reduced, landed, slow]);
 
   // 動畫進行到一半時，使用者開啟「減少動態效果」：直接跳到結果。
   useEffect(() => {
@@ -156,7 +160,7 @@ export function BusBallSim(): React.JSX.Element {
   const braking = brakeAt !== null && t > brakeAt;
   const throwDisabled = throwAt !== null;
   const brakeDisabled = brakeAt !== null || (landed && !reduced);
-  const speedText = `公車速度：${speed.toFixed(1)} 公尺/秒${braking ? (speed > 0 ? '（煞車中）' : '（已停住）') : ''}`;
+  const speedText = `公車速度：${speed.toFixed(1)} 公尺/秒${braking ? (speed > 0 ? '（煞車中）' : '（已停住）') : ''}${slow ? '，慢動作中' : ''}`;
 
   return (
     <div role="group" aria-label="公車與球的模擬" style={{ width: '100%', maxWidth: '100%' }}>
@@ -250,6 +254,23 @@ export function BusBallSim(): React.JSX.Element {
           重來
         </button>
       </div>
+
+      {!reduced && (
+        <>
+          <p style={{ margin: '12px 0 0', fontSize: 14 }}>
+            球只在空中停留 1 秒，要在球飛的時候按「<span style={{ whiteSpace: 'nowrap' }}>急煞車</span>」；越早按，球落得越前面。
+          </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, fontSize: 16, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={slow}
+              onChange={(event) => setSlow(event.target.checked)}
+              style={{ width: 22, height: 22, margin: 0, accentColor: PRIMARY_COLOR }}
+            />
+            慢動作
+          </label>
+        </>
+      )}
 
       <p role="status" aria-live="polite" style={{ margin: '12px 0 0', minHeight: '1.5em', fontSize: 18, fontWeight: 700, textAlign: 'center' }}>
         {resultText}

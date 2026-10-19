@@ -25,6 +25,7 @@ const throwButton = () => screen.getByRole('button', { name: '丟球' });
 const brakeButton = () => screen.getByRole('button', { name: '急煞車' });
 const resetButton = () => screen.getByRole('button', { name: '重來' });
 const result = () => screen.getByRole('status');
+const slowToggle = () => screen.getByRole('checkbox', { name: '慢動作' });
 const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 
 it('有「丟球」「急煞車」「重來」三個按鈕，至少 44px 高，一開始沒有結果', () => {
@@ -74,6 +75,12 @@ describe('減少動態效果', () => {
     expect(result()).toBeEmptyDOMElement();
     fireEvent.click(throwButton());
     expect(result()).toHaveTextContent(/^落在你前方 4\.0 公尺$/);
+  });
+
+  it('沒有動畫可以放慢，所以不顯示「慢動作」開關', () => {
+    mockReducedMotion(true);
+    render(<BusBallSim />);
+    expect(screen.queryByRole('checkbox', { name: '慢動作' })).not.toBeInTheDocument();
   });
 
   it('「重來」清掉結果，可以再試一次', () => {
@@ -154,6 +161,77 @@ describe('有動畫（假的計時器）', () => {
     fireEvent.click(brakeButton());
     advance(700);
     expect(result()).toHaveTextContent(/^落在你前方/);
+  });
+
+  it('按鈕下面有提示：球只在空中 1 秒，越早按急煞車落得越前面', () => {
+    setup();
+    const hint = '球只在空中停留 1 秒，要在球飛的時候按「急煞車」；越早按，球落得越前面。';
+    expect(screen.getByText((_, element) => element?.tagName === 'P' && element.textContent === hint)).toBeInTheDocument();
+  });
+
+  it('「慢動作」開關預設是關的，開關有 44px 以上的點擊範圍', () => {
+    setup();
+    expect(slowToggle()).not.toBeChecked();
+    expect(slowToggle().closest('label')).toHaveStyle({ minHeight: '44px' });
+  });
+
+  it('慢動作開啟：1 秒後球還沒落地，4 秒後才落地，結果和即時速度一樣是「落在手上」', () => {
+    setup();
+    fireEvent.click(slowToggle());
+    fireEvent.click(throwButton());
+    advance(1000);
+    expect(result()).toBeEmptyDOMElement();
+    advance(3500);
+    expect(result()).toHaveTextContent(/^落在手上$/);
+  });
+
+  it('慢動作開啟：在球飛到一半（慢動作的 2 秒）按「急煞車」，結果和即時速度一樣約 1 公尺', () => {
+    setup();
+    fireEvent.click(slowToggle());
+    fireEvent.click(throwButton());
+    advance(2000);
+    expect(result()).toBeEmptyDOMElement();
+    fireEvent.click(brakeButton());
+    advance(3000);
+    const match = /^落在你前方 (\d\.\d) 公尺$/.exec(result().textContent ?? '');
+    expect(match).not.toBeNull();
+    const meters = Number(match?.[1]);
+    expect(meters).toBeGreaterThanOrEqual(0.8);
+    expect(meters).toBeLessThanOrEqual(1.2);
+  });
+
+  it('慢動作：同一刻煞車並丟球，仍然落在前方 4.0 公尺', () => {
+    setup();
+    fireEvent.click(slowToggle());
+    fireEvent.click(brakeButton());
+    fireEvent.click(throwButton());
+    advance(5000);
+    expect(result()).toHaveTextContent(/^落在你前方 4\.0 公尺$/);
+  });
+
+  it('飛行途中切換慢動作不會弄壞狀態：開了就變慢，關了就恢復', () => {
+    setup();
+    advance(100);
+    fireEvent.click(throwButton());
+    advance(400);
+    fireEvent.click(slowToggle());
+    advance(1000);
+    expect(result()).toBeEmptyDOMElement();
+    expect(throwButton()).toBeDisabled();
+    fireEvent.click(slowToggle());
+    advance(500);
+    expect(result()).toHaveTextContent(/^落在手上$/);
+  });
+
+  it('按「重來」不會把慢動作關掉', () => {
+    setup();
+    fireEvent.click(slowToggle());
+    fireEvent.click(throwButton());
+    advance(4500);
+    expect(result()).toHaveTextContent(/^落在手上$/);
+    fireEvent.click(resetButton());
+    expect(slowToggle()).toBeChecked();
+    expect(result()).toBeEmptyDOMElement();
   });
 
   it('丟球之後「丟球」不能再按，煞車之後「急煞車」不能再按', () => {
