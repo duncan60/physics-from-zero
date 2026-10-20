@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { blankCells, checkChoice, checkNumber, checkTable } from '../lib/answer';
+import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
 import type { QuestionStep } from '../lib/types';
 import { ChoiceInput } from './steps/ChoiceInput';
@@ -11,6 +11,7 @@ import { useActionGuard } from './useActionGuard';
 type Phase = 'answering' | 'correct' | 'wrong' | 'revealed';
 
 const NEED_NUMBER = '請先輸入數字';
+const NUMBER_ONLY = '只要填數字，不用寫單位';
 const NEED_CHOICE = '請先選一個答案';
 
 /** 看解答時，「正確答案」下面那一行。表格題的答案直接填進格子裡，所以沒有這一行。 */
@@ -86,7 +87,10 @@ export function QuestionCard(props: {
       }
     }
     if (result === 'invalid') {
-      setHint(step.kind === 'choice' ? NEED_CHOICE : NEED_NUMBER);
+      // 「10公尺」這種輸入：學習者打了數字，只是多打了單位，提示要說清楚是哪裡不對。
+      const typedUnit =
+        step.kind === 'number' ? hasUnitAfterNumber(numberRaw) : step.kind === 'table' && tableRaws.some((raw) => hasUnitAfterNumber(raw));
+      setHint(step.kind === 'choice' ? NEED_CHOICE : typedUnit ? NUMBER_ONLY : NEED_NUMBER);
       return;
     }
     setHint(null);

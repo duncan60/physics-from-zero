@@ -21,6 +21,17 @@ export function parseNumberInput(raw: string): number | null {
   return Number(text);
 }
 
+/**
+ * 數字後面多打了單位（例如「10公尺」「2 m/s」）。parseNumberInput 不接受這種輸入，
+ * 這時要告訴學習者「只要填數字」，而不是「請先輸入數字」（他明明打了數字）。
+ * 不直接把單位去掉當作答對：打錯單位（速度題打「10秒」）也會被當成對的。
+ * 只有數字後面出現文字或度數符號才算；「2/3」「1,000」這類看起來像數字的輸入不算。
+ */
+export function hasUnitAfterNumber(raw: string): boolean {
+  const match = /^[+-]?\d+(\.\d+)?\s*(.+)$/.exec(toHalfWidth(raw).trim());
+  return match !== null && /[\p{L}°℃]/u.test(match[2]);
+}
+
 function isClose(value: number, answer: number, tolerance = 0): boolean {
   return Math.abs(value - answer) <= tolerance + EPSILON;
 }

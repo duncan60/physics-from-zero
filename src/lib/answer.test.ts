@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blankCells, checkChoice, checkNumber, checkTable, parseNumberInput } from './answer';
+import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber, parseNumberInput } from './answer';
 import type { ChoiceStep, NumberStep, TableStep } from './types';
 
 describe('parseNumberInput', () => {
@@ -7,6 +7,17 @@ describe('parseNumberInput', () => {
     ['18', 18], [' 18 ', 18], ['１８', 18], ['-2', -2], ['－2', -2], ['−2', -2], ['+3', 3], ['2.5', 2.5], ['０．５', 0.5],
   ])('%s → %s', (raw, n) => expect(parseNumberInput(raw)).toBe(n));
   it.each(['', '  ', 'abc', '1,000', '--2', '2-'])('無法解析：%s', (raw) => expect(parseNumberInput(raw)).toBeNull());
+});
+
+describe('hasUnitAfterNumber（數字後面多打了單位）', () => {
+  it.each(['10公尺', '10 公尺', '2 m/s', '-10 公尺/秒', '−2m/s²', '１０公尺', '3 秒後', '9.8m/s2', '10.公尺', '25°', '25 ℃'])('算：%s', (raw) =>
+    expect(hasUnitAfterNumber(raw)).toBe(true),
+  );
+  // 分數、千分位這類「看起來像數字」的輸入不算：提示「不用寫單位」反而會讓人更困惑。
+  it.each(['', '10', ' 10 ', '-2', 'abc', '公尺', '公尺 10', '1,000', '2/3', '2-', '--2', '2.5.3'])('不算：%s', (raw) =>
+    expect(hasUnitAfterNumber(raw)).toBe(false),
+  );
+  it('多打了單位的輸入，parseNumberInput 仍然不接受（單位對不對交給學習者自己看）', () => expect(parseNumberInput('10公尺')).toBeNull());
 });
 
 describe('checkNumber', () => {
