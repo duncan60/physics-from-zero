@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -353,16 +353,105 @@ it('表格題的格子多打了單位，也提示「只要填數字，不用寫�
   expect(screen.queryByText('還不對')).not.toBeInTheDocument();
 });
 
-it('中途按離開，只呼叫 onExit', async () => {
+it('上方看得到課程名稱，和「離開」、進度條在同一列', () => {
+  renderPlayer(guidedLesson);
+  const title = screen.getByText('測試課程');
+  expect(title).toBeVisible();
+  expect(title.parentElement?.parentElement).toContainElement(button('離開'));
+  expect(title.parentElement).toContainElement(screen.getByRole('progressbar'));
+  expect(screen.getByRole('region', { name: '測試課程' })).toBeInTheDocument();
+});
+
+it('還沒答過題目就按「離開」：直接離開，不多問', async () => {
+  const { user, onComplete, onExit } = renderPlayer(guidedLesson);
+
+  await user.click(button('繼續'));
+  await user.click(screen.getByRole('radio', { name: '選項 B' })); // 選了，但還沒按「檢查」
+  await user.click(button('離開'));
+
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(onExit).toHaveBeenCalledTimes(1);
+  expect(onComplete).not.toHaveBeenCalled();
+});
+
+it('答過題目後按「離開」：先問一次；「繼續上課」回到原本的地方，作答狀態還在', async () => {
+  const { user, onComplete, onExit } = renderPlayer(guidedLesson);
+
+  await user.click(button('繼續'));
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeVisible();
+
+  await user.click(button('離開'));
+  expect(onExit).not.toHaveBeenCalled();
+  const dialog = screen.getByRole('alertdialog', { name: '要離開這一課嗎？' });
+  expect(dialog).toHaveAccessibleDescription('離開後，這一課要從頭開始。');
+  expect(within(dialog).getByRole('button', { name: '繼續上課' })).toHaveFocus(); // 預設是比較安全的那一個
+  expect(screen.getByText('還不對')).not.toBeVisible(); // 題目先收起來，畫面上只有這個問題
+
+  // 再按一次「離開」不會就這樣離開
+  await user.click(button('離開'));
+  expect(onExit).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+
+  await user.click(button('繼續上課'));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(screen.getByText('還不對')).toBeVisible();
+  expect(screen.getByText('最後一步再看一次')).toBeVisible();
+  expect(button('離開')).toHaveFocus(); // 焦點回到按下去的按鈕
+  expect(onExit).not.toHaveBeenCalled();
+  expect(onComplete).not.toHaveBeenCalled();
+});
+
+it('答對、還沒按「繼續」就按「離開」，也要先問', async () => {
+  const { user, onExit } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('離開'));
+  expect(screen.getByRole('alertdialog', { name: '要離開這一課嗎？' })).toBeInTheDocument();
+  expect(onExit).not.toHaveBeenCalled();
+});
+
+it('答過題目後按「離開」再按「確定離開」：才呼叫 onExit，不算完成', async () => {
   const { user, onComplete, onExit } = renderPlayer(guidedLesson);
 
   await user.click(button('繼續'));
   await user.click(screen.getByRole('radio', { name: '選項 B' }));
   await user.click(button('檢查'));
   await user.click(button('離開'));
+  await user.click(button('確定離開'));
 
   expect(onExit).toHaveBeenCalledTimes(1);
   expect(onComplete).not.toHaveBeenCalled();
+});
+
+it('確認離開時按 Esc，等於「繼續上課」', async () => {
+  const { user, onExit } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('離開'));
+
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(screen.getByText('答對了')).toBeVisible();
+  expect(button('離開')).toHaveFocus();
+  expect(onExit).not.toHaveBeenCalled();
+});
+
+it('「離開」之後馬上連點，不會按到「確定離開」', async () => {
+  const { user, fast, onExit } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  settle();
+
+  await fast.click(button('離開'));
+  await fast.click(button('確定離開'));
+  expect(onExit).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+
+  settle();
+  await fast.click(button('確定離開'));
+  expect(onExit).toHaveBeenCalledTimes(1);
 });
 
 it('表格題標出答錯的格子', async () => {
