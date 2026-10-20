@@ -32,7 +32,7 @@ export function hasUnitAfterNumber(raw: string): boolean {
   return match !== null && /[\p{L}°℃]/u.test(match[2]);
 }
 
-function isClose(value: number, answer: number, tolerance = 0): boolean {
+export function isClose(value: number, answer: number, tolerance = 0): boolean {
   return Math.abs(value - answer) <= tolerance + EPSILON;
 }
 

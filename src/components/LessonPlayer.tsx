@@ -176,12 +176,16 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
     );
   }
 
-  function renderStep(current: Step): React.JSX.Element {
+  function renderStep(current: Step): React.JSX.Element | null {
     switch (current.kind) {
       case 'concept':
         return <ConceptView step={current} onContinue={advance} />;
       case 'sim':
         return <SimView step={current} onContinue={advance} />;
+      case 'formula':
+      case 'slider':
+      case 'match':
+        return null; // TODO(Task 4)：拼算式、滑桿、配對的畫面
       case 'choice':
       case 'number':
       case 'table':

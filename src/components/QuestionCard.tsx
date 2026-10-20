@@ -1,11 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
-import type { QuestionStep } from '../lib/types';
+import type { ChoiceStep, NumberStep, TableStep } from '../lib/types';
 import { ChoiceInput } from './steps/ChoiceInput';
 import { NumberInput, formatNumber } from './steps/NumberInput';
 import { TableInput } from './steps/TableInput';
 import { useActionGuard } from './useActionGuard';
+
+// TODO(Task 4)：拼算式（formula）和滑桿（slider）的畫面還沒做，QuestionCard 暫時只收舊的三種題型；Task 4 改回 QuestionStep。
+type QuestionStep = ChoiceStep | NumberStep | TableStep;
 
 // answering：作答中；correct：答對了；wrong：還不對；revealed：看了解答。
 type Phase = 'answering' | 'correct' | 'wrong' | 'revealed';

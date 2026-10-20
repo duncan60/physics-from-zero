@@ -11,6 +11,7 @@ function withGuides(lesson: Lesson): (Step | GuideStep)[] {
   return lesson.steps.flatMap((s) => [s, ...('guide' in s && s.guide ? s.guide : [])]);
 }
 
+// TODO(Task 6)：還沒有課程用到 formula / slider / match，這裡先只認舊的三種題型；Task 6 擴充檢查。
 function isQuestion(s: Step | GuideStep): s is QuestionStep {
   return s.kind === 'choice' || s.kind === 'number' || s.kind === 'table';
 }
@@ -37,7 +38,7 @@ function assertAnswerable(s: QuestionStep): void {
       const sameAsAnswer = Math.abs(wrong.value - s.answer) <= (s.tolerance ?? 0) + EPSILON;
       expect(sameAsAnswer, `${s.id}：wrongAnswers 的 ${wrong.value} 會被判為正確`).toBe(false);
     }
-  } else {
+  } else if (s.kind === 'table') {
     for (const row of s.rows) expect(row.cells, `${s.id}：「${row.label}」的格數和欄數不同`).toHaveLength(s.columns.length);
     const blanks = blankCells(s);
     expect(blanks.length, `${s.id}：表格沒有空格`).toBeGreaterThan(0);
