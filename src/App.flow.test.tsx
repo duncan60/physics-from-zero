@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-import { STORAGE_KEY, localDayKey } from './lib/progress';
+import { STORAGE_KEY, completeLesson, loadProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
 
 // App 怎麼接 LessonPlayer 的 onComplete／onExit：換成一個假的上課畫面，不用真的把一課上完。
@@ -71,6 +71,22 @@ async function goBack(): Promise<void> {
 function storedProgress(): Progress | null {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   return raw === null ? null : (JSON.parse(raw) as Progress);
+}
+
+/**
+ * 模擬同一個瀏覽器裡的另一個分頁上完一課：和真的 App 一樣讀出儲存空間的進度、加上這一課、存回去。
+ * `notify`：瀏覽器會對「其他」分頁發出 storage 事件（寫入的分頁自己收不到），這裡手動發給畫面上的 App。
+ * 分頁在背景被凍結時可能收不到事件，所以也要測不發事件的情況。
+ */
+function otherTabCompletes(lessonId: string, xp: number, options: { notify: boolean }): void {
+  const oldValue = window.localStorage.getItem(STORAGE_KEY);
+  const next = completeLesson(loadProgress(window.localStorage), lessonId, xp, localDayKey(new Date()));
+  const newValue = JSON.stringify(next);
+  window.localStorage.setItem(STORAGE_KEY, newValue);
+  if (!options.notify) return;
+  act(() => {
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, oldValue, newValue, storageArea: window.localStorage }));
+  });
 }
 
 it('上完一課：完成畫面一出現就存檔、頁首更新；按「回到地圖」回到 #/，下一課變成可以上', async () => {
@@ -164,4 +180,51 @@ it('存不進去（例如空間滿了）時，這次的進度仍然顯示在畫�
   expect(window.location.hash).toBe('#/');
   expect(screen.getByText('15 XP')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /速度與位置/ })).toHaveTextContent('可以上');
+});
+
+it('另一個分頁上完一課（收到 storage 事件）：這個分頁的頁首和地圖跟著更新', () => {
+  render(<App />);
+  expect(screen.getByText('0 XP')).toBeInTheDocument();
+
+  otherTabCompletes('1-1', 15, { notify: true });
+
+  expect(screen.getByText('15 XP')).toBeInTheDocument();
+  expect(screen.getByText('連續 1 天')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('已完成');
+  expect(screen.getByRole('link', { name: /速度與位置/ })).toHaveTextContent('可以上');
+});
+
+it('沒收到 storage 事件的舊分頁上完一課，不會蓋掉另一個分頁存的進度', async () => {
+  const user = userEvent.setup();
+  render(<App />); // 這個分頁打開時還沒有任何進度
+  await user.click(screen.getByRole('link', { name: /慣性/ }));
+
+  // 這段時間另一個分頁上完了 1-1 和 1-2，這個分頁沒收到通知
+  otherTabCompletes('1-1', 15, { notify: false });
+  otherTabCompletes('1-2', 15, { notify: false });
+
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  expect(storedProgress()).toEqual({ version: 1, completed: ['1-1', '1-2'], xp: 45, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  expect(screen.getByText('45 XP')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(screen.getByRole('link', { name: /速度與位置/ })).toHaveTextContent('已完成');
+  expect(screen.getByRole('link', { name: /加速度/ })).toHaveTextContent('可以上');
+});
+
+it('存不進去時，連上兩課，XP 仍然在畫面上累加（不會被讀回來的空進度蓋掉）', async () => {
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('quota', 'QuotaExceededError');
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('link', { name: /慣性/ }));
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  await user.click(screen.getByRole('link', { name: /速度與位置/ }));
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+
+  expect(screen.getByText('30 XP')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(screen.getByRole('link', { name: /加速度/ })).toHaveTextContent('可以上');
 });

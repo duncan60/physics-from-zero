@@ -10,6 +10,7 @@ import {
   isLessonUnlocked,
   loadProgress,
   localDayKey,
+  mergeProgress,
   previousDay,
   saveProgress,
 } from './progress';
@@ -51,6 +52,43 @@ describe('completeLesson', () => {
     const r = completeLesson(p, '1-1', 10, '2026-10-19');
     expect(r.completed).not.toBe(p.completed);
     expect(p).toEqual(snapshot);
+  });
+});
+
+describe('mergeProgress（兩個分頁各自的進度合在一起）', () => {
+  const day = '2026-10-19';
+  it('完成的課取聯集，不重複，原本的順序在前', () => {
+    const a = { ...emptyProgress(), completed: ['1-1', '1-2'] };
+    const b = { ...emptyProgress(), completed: ['1-1', '1-3'] };
+    expect(mergeProgress(a, b).completed).toEqual(['1-1', '1-2', '1-3']);
+  });
+  it('XP 只會增加，取大的', () => {
+    expect(mergeProgress({ ...emptyProgress(), xp: 20 }, { ...emptyProgress(), xp: 35 }).xp).toBe(35);
+    expect(mergeProgress({ ...emptyProgress(), xp: 35 }, { ...emptyProgress(), xp: 20 }).xp).toBe(35);
+  });
+  it('連續天數跟著最後學習日比較晚的那一份', () => {
+    const older = { ...emptyProgress(), streak: 5, lastActiveDay: '2026-10-10' };
+    const newer = { ...emptyProgress(), streak: 1, lastActiveDay: day };
+    expect(mergeProgress(older, newer)).toMatchObject({ streak: 1, lastActiveDay: day });
+    expect(mergeProgress(newer, older)).toMatchObject({ streak: 1, lastActiveDay: day });
+  });
+  it('最後學習日同一天，連續天數取大的', () => {
+    const a = { ...emptyProgress(), streak: 2, lastActiveDay: day };
+    const b = { ...emptyProgress(), streak: 3, lastActiveDay: day };
+    expect(mergeProgress(a, b)).toMatchObject({ streak: 3, lastActiveDay: day });
+  });
+  it('沒學過的一份（lastActiveDay 是 null）不會蓋掉有學過的', () => {
+    const studied = { ...emptyProgress(), completed: ['1-1'], xp: 15, streak: 1, lastActiveDay: day };
+    expect(mergeProgress(emptyProgress(), studied)).toEqual(studied);
+    expect(mergeProgress(studied, emptyProgress())).toEqual(studied);
+  });
+  it('不改動傳入的物件，也不共用 completed 陣列', () => {
+    const a = { ...emptyProgress(), completed: ['1-1'] };
+    const b = emptyProgress();
+    const merged = mergeProgress(a, b);
+    expect(merged.completed).not.toBe(a.completed);
+    expect(a).toEqual({ ...emptyProgress(), completed: ['1-1'] });
+    expect(b).toEqual(emptyProgress());
   });
 });
 
