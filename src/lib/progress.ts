@@ -85,6 +85,22 @@ export function completeLesson(p: Progress, lessonId: string, xpGained: number, 
   return { version: 1, completed, xp: p.xp + xpGained, streak, lastActiveDay: today };
 }
 
+/**
+ * 合併兩份進度（例如這個分頁記得的，和別的分頁剛存進儲存空間的），兩邊做過的都留下：
+ * 完成的課取聯集，XP 取大的（XP 只會增加），連續天數跟著最後學習日比較晚的那一份，同一天就取大的。
+ * 回傳新物件，不改動傳入的物件。
+ */
+export function mergeProgress(a: Progress, b: Progress): Progress {
+  const completed = [...a.completed, ...b.completed.filter((id) => !a.completed.includes(id))];
+  const xp = Math.max(a.xp, b.xp);
+  // 'YYYY-MM-DD' 照字串比就是照日期比；沒學過（null）比任何一天都早。
+  const aDay = a.lastActiveDay ?? '';
+  const bDay = b.lastActiveDay ?? '';
+  if (aDay === bDay) return { version: 1, completed, xp, streak: Math.max(a.streak, b.streak), lastActiveDay: a.lastActiveDay };
+  const later = aDay > bDay ? a : b;
+  return { version: 1, completed, xp, streak: later.streak, lastActiveDay: later.lastActiveDay };
+}
+
 /** 畫面上要顯示的連續天數：今天或昨天有學過才算數（今天還來得及延續），否則歸零。 */
 export function displayedStreak(p: Progress, today: string): number {
   if (p.lastActiveDay === today || p.lastActiveDay === previousDay(today)) return p.streak;

@@ -5,7 +5,16 @@ import { Header } from './components/Header';
 import { LessonPlayer } from './components/LessonPlayer';
 import { PathMap, canOpenLesson } from './components/PathMap';
 import { findLesson } from './content/stations';
-import { completeLesson, displayedStreak, getStorage, loadProgress, localDayKey, saveProgress } from './lib/progress';
+import {
+  STORAGE_KEY,
+  completeLesson,
+  displayedStreak,
+  getStorage,
+  loadProgress,
+  localDayKey,
+  mergeProgress,
+  saveProgress,
+} from './lib/progress';
 import type { Progress } from './lib/progress';
 import { useHashRoute } from './lib/router';
 import type { Route } from './lib/router';
@@ -70,15 +79,31 @@ export default function App(): React.JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
   useRouteChangeFocusAndScroll(routeKey(route), mainRef);
 
+  // 同時開了好幾個分頁：別的分頁存了進度，瀏覽器會在這個分頁發出 storage 事件（寫入的分頁自己收不到）。
+  // 合併進來，頁首和地圖跟著更新。合併只會增加不會減少，所以別處清掉儲存空間也不會讓畫面上的進度消失。
+  useEffect(() => {
+    function onStorage(event: StorageEvent): void {
+      if (event.key !== STORAGE_KEY) return;
+      setProgress((current) => mergeProgress(current, loadProgress(getStorage())));
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   // 完成畫面的「回到地圖」、中途按「離開」、找不到或還沒解鎖時的「回到地圖」：取代這一筆瀏覽紀錄，
   // 不然上一頁會重新打開剛上完（或剛離開）的課。從地圖打開一課則照常新增一筆。
   const backToMap = (): void => navigate({ name: 'map' }, { replace: true });
 
   // 完成畫面一出現，LessonPlayer 就會呼叫這裡（只呼叫一次）：存檔、更新頁首，但不換頁，學習者還在看完成畫面。
   // 之後按「回到地圖」走 onExit；直接按上一頁或關掉分頁，進度也已經存好了。
+  // 存檔前先和儲存空間裡最新的進度合併：分頁在背景被凍結時可能沒收到 storage 事件，
+  // 直接用這個分頁記得的舊進度存檔，會蓋掉別的分頁這段時間完成的課和 XP。
+  // 合併而不是直接改用讀回來的：存不進去（空間滿了）時，讀回來的是空的，這個分頁記得的進度不能丟。
   function finishLesson(lessonId: string, xpGained: number): void {
-    const next = completeLesson(progress, lessonId, xpGained, localDayKey(new Date()));
-    saveProgress(getStorage(), next); // 存不進去也沒關係，這次的進度仍然留在畫面上
+    const storage = getStorage();
+    const latest = mergeProgress(progress, loadProgress(storage));
+    const next = completeLesson(latest, lessonId, xpGained, localDayKey(new Date()));
+    saveProgress(storage, next); // 存不進去也沒關係，這次的進度仍然留在畫面上
     setProgress(next);
   }
 
