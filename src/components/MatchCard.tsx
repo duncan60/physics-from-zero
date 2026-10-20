@@ -104,6 +104,8 @@ export function MatchCard(props: {
         style={ITEM_STYLE}
       >
         {text}
+        {/* 配好的那一塊，畫面上是綠框和打勾；螢幕閱讀器念「（已配對）」 */}
+        {matched && <span className="lp-sr-only">（已配對）</span>}
       </button>
     );
   }

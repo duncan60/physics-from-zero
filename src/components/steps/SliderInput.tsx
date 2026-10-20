@@ -43,8 +43,9 @@ export function SliderInput(props: {
   onEnter: () => void;
   disabled: boolean;
   mark: 'correct' | 'wrong' | null;
+  describedBy?: string;
 }): React.JSX.Element {
-  const { step, value, onChange, onEnter, disabled, mark } = props;
+  const { step, value, onChange, onEnter, disabled, mark, describedBy } = props;
   const id = useId();
   const text = `${formatNumber(value)} ${step.unit}`;
   const enter = onEnterKey(onEnter);
@@ -88,6 +89,7 @@ export function SliderInput(props: {
         onKeyDown={handleKey}
         disabled={disabled}
         aria-valuetext={text}
+        aria-describedby={describedBy}
         style={style}
       />
       <div className="lp-slider-scale" aria-hidden="true">

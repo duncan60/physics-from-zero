@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
+import { spokenTile } from './components/steps/FormulaInput';
 import { stations } from './content/stations';
 import { blankCells } from './lib/answer';
 import { emptyStats, lessonXp, recordQuestion } from './lib/game';
@@ -159,7 +160,7 @@ async function playStep(user: User, step: Step): Promise<void> {
       break;
     case 'formula': {
       const bank = screen.getByRole('group', { name: '磚塊' });
-      for (const token of step.accepted[0]) await user.click(within(bank).getAllByRole('button', { name: `放入 ${token}` })[0]);
+      for (const token of step.accepted[0]) await user.click(within(bank).getAllByRole('button', { name: `放入 ${spokenTile(token)}` })[0]);
       await user.click(button('檢查'));
       expect(screen.queryByText('還不對'), `${step.id}：算式沒有拼對`).not.toBeInTheDocument();
       await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), String(step.answer));

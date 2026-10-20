@@ -3,6 +3,27 @@ import { useLayoutEffect, useRef } from 'react';
 // 磚塊的大小寫在這裡（不放在 CSS），保證至少 44px 好按；空位用同樣的大小。
 const TILE_STYLE = { minHeight: 48, minWidth: 48 };
 
+// 符號磚塊念出來的名稱。VoiceOver 預設的標點設定會跳過「(」「)」，其他符號各家念法也不一，
+// 所以按鈕的名稱用中文說出來；畫面上的磚塊還是符號。數字照原樣。
+const SPOKEN: Record<string, string> = {
+  '(': '左括號',
+  ')': '右括號',
+  '+': '加',
+  '−': '減',
+  '×': '乘',
+  '÷': '除以',
+};
+
+/** 一塊磚念出來的名稱，例如「(」→「左括號」、「÷」→「除以」，數字不變。 */
+export function spokenTile(value: string): string {
+  return SPOKEN[value] ?? value;
+}
+
+/** 一串磚塊念出來的樣子，用空白隔開，例如「左括號 6 加 18 右括號 除以 2」。 */
+export function spokenFormula(tokens: string[]): string {
+  return tokens.map(spokenTile).join(' ');
+}
+
 /** 放上去或拿回來之後，焦點要移去的地方（按下去的那顆按鈕已經不在原處了）。 */
 type FocusTarget = { area: 'bank'; tile: number } | { area: 'row'; position: number } | { area: 'row-group' };
 
@@ -69,7 +90,7 @@ export function FormulaInput(props: {
             type="button"
             className="lp-tile"
             disabled={disabled}
-            aria-label={disabled ? tiles[tile] : `拿回 ${tiles[tile]}`}
+            aria-label={disabled ? spokenTile(tiles[tile]) : `拿回 ${spokenTile(tiles[tile])}`}
             onClick={() => remove(position)}
             style={TILE_STYLE}
           >
@@ -92,7 +113,7 @@ export function FormulaInput(props: {
                 className="lp-tile"
                 data-tile={tile}
                 disabled={disabled}
-                aria-label={disabled ? value : `放入 ${value}`}
+                aria-label={disabled ? spokenTile(value) : `放入 ${spokenTile(value)}`}
                 onClick={() => place(tile)}
                 style={TILE_STYLE}
               >
