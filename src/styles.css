@@ -609,7 +609,7 @@ a.path-node:active .path-node-circle {
   padding-bottom: 8px;
 }
 
-/* 上課時「離開」和進度條固定在畫面上方，捲動時也看得到。 */
+/* 上課時「離開」、課程名稱和進度條固定在畫面上方，捲動時也看得到。 */
 .lp-topbar {
   position: sticky;
   top: 0;
@@ -643,8 +643,27 @@ a.path-node:active .path-node-circle {
   box-shadow: none;
 }
 
-.lp-progress {
+/* 課程名稱在上、進度條在下；兩行加起來不比「離開」高，上方固定列的高度不變。 */
+.lp-topbar-main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0; /* 課程名稱太長時才能用「…」截斷，不會把版面撐寬 */
+}
+
+.lp-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-progress {
   height: 14px;
   overflow: hidden;
   border-radius: 999px;
@@ -669,6 +688,28 @@ a.path-node:active .path-node-circle {
 
 .lp-actions > .lp-button {
   flex: 1 1 140px;
+}
+
+/* ---- 確認離開 ---- */
+
+.lp-leave {
+  padding: 20px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+}
+
+.lp-leave-title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.lp-leave-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.7;
 }
 
 /* ---- 觀念卡、模擬 ---- */

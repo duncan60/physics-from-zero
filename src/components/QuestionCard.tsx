@@ -30,13 +30,15 @@ function solutionText(step: QuestionStep): string | null {
  * 一道題目：作答 →「檢查」→ 答對、答錯或看解答。
  * `onFinish(cleanFirstTry)`：第一次檢查就答對、也沒有看解答時是 true。輸入無效不算一次作答。
  * 只有同時傳入 `onRequestGuide`、題目也有 `guide` 時，答錯才會出現「一步一步來」；否則是「再試一次」。
+ * `onCheck()`：每次按「檢查」、答案有效（不論對錯）時呼叫。
  */
 export function QuestionCard(props: {
   step: QuestionStep;
   onFinish: (cleanFirstTry: boolean) => void;
   onRequestGuide?: () => void;
+  onCheck?: () => void;
 }): React.JSX.Element {
-  const { step, onFinish, onRequestGuide } = props;
+  const { step, onFinish, onRequestGuide, onCheck } = props;
   const promptId = useId();
   const hintId = useId();
   const [phase, setPhase] = useState<Phase>('answering');
@@ -94,6 +96,7 @@ export function QuestionCard(props: {
       return;
     }
     setHint(null);
+    onCheck?.();
     if (result.correct) {
       setPhase('correct');
       return;

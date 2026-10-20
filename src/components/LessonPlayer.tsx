@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { XP_PER_FIRST_TRY, XP_PER_LESSON } from '../lib/progress';
 import type { Lesson, SimStep, Step } from '../lib/types';
 import { BusBallSim } from '../sims/BusBallSim';
@@ -14,7 +14,7 @@ interface Props {
    * 看到完成畫面後直接按上一頁、用返回手勢或關掉分頁，這一課也已經算完成。
    */
   onComplete: (xpGained: number) => void;
-  /** 中途按「離開」，或在完成畫面按「回到地圖」。 */
+  /** 中途離開（答過題目的話，要在確認時按「確定離開」），或在完成畫面按「回到地圖」。 */
   onExit: () => void;
 }
 
@@ -48,7 +48,48 @@ function SimView(props: { step: SimStep; onContinue: () => void }): React.JSX.El
 }
 
 /**
- * 一課的流程：一次一個步驟，上方是「離開」和進度條，最後是完成畫面。
+ * 答過題目後按「離開」時，先問一次，避免誤觸就丟掉這一課做到一半的進度。
+ * 不用瀏覽器的 confirm()：樣式和網站一致，手機上也不會跳出系統對話框。按 Esc 等於「繼續上課」。
+ */
+function ExitConfirm(props: { onStay: () => void; onLeave: () => void }): React.JSX.Element {
+  const { onStay, onLeave } = props;
+  const titleId = useId();
+  const textId = useId();
+  // 剛出現的這段時間內按到的不算：連點「離開」的第二下不會變成「確定離開」。
+  const guard = useActionGuard();
+  return (
+    <section
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={textId}
+      className="lp-leave"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        onStay();
+      }}
+    >
+      <h2 id={titleId} className="lp-leave-title">
+        要離開這一課嗎？
+      </h2>
+      <p id={textId} className="lp-leave-text">
+        離開後，這一課要從頭開始。
+      </p>
+      <div className="lp-actions">
+        {/* 預設焦點在比較安全的「繼續上課」 */}
+        <button ref={focusOnMount} type="button" className="lp-button lp-button--primary" onClick={guard(onStay)}>
+          繼續上課
+        </button>
+        <button type="button" className="lp-button lp-button--secondary" onClick={guard(onLeave)}>
+          確定離開
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 一課的流程：一次一個步驟，上方是「離開」、課程名稱和進度條，最後是完成畫面。
  * XP：每一題第一次就答對（沒有用引導、沒有看解答）得 XP_PER_FIRST_TRY，完成一課再加 XP_PER_LESSON。
  */
 export function LessonPlayer(props: Props): React.JSX.Element {
@@ -64,6 +105,11 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
   // 這一題用過引導，就不是第一次就答對。
   const [guided, setGuided] = useState(false);
   const [firstTryCount, setFirstTryCount] = useState(0);
+  // 檢查過任何一題（不論對錯）之後，按「離開」要先確認；還沒作答就離開，沒有什麼會丟掉。
+  const [answered, setAnswered] = useState(false);
+  const [confirmingExit, setConfirmingExit] = useState(false);
+  const exitRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
   const reported = useRef(false);
   // 完成畫面的「回到地圖」：最後一題連點「繼續」時，不會一路按出這一課（進度在完成畫面出現時就回報了）。
   const guard = useActionGuard(index);
@@ -103,6 +149,17 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
     setAttempt((n) => n + 1);
   }
 
+  // 確認中再按一次「離開」不會怎樣，連點兩下不會直接離開。
+  function requestExit(): void {
+    if (answered) setConfirmingExit(true);
+    else onExit();
+  }
+
+  function stay(): void {
+    setConfirmingExit(false);
+    exitRef.current?.focus();
+  }
+
   if (step === undefined) {
     return (
       <section className="lp-player" aria-label={lesson.title}>
@@ -129,28 +186,43 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
       case 'number':
       case 'table':
         if (inGuide) return <GuideRunner steps={current.guide ?? []} onDone={finishGuide} />;
-        return <QuestionCard step={current} onFinish={finishQuestion} onRequestGuide={startGuide} />;
+        return (
+          <QuestionCard step={current} onFinish={finishQuestion} onRequestGuide={startGuide} onCheck={() => setAnswered(true)} />
+        );
     }
   }
 
   return (
-    <section className="lp-player" aria-label={lesson.title}>
+    <section className="lp-player" aria-labelledby={titleId}>
       <div className="lp-topbar">
-        <button type="button" className="lp-button lp-exit" onClick={onExit}>
+        <button ref={exitRef} type="button" className="lp-button lp-exit" onClick={requestExit}>
           離開
         </button>
-        <div
-          className="lp-progress"
-          role="progressbar"
-          aria-label="課程進度"
-          aria-valuemin={0}
-          aria-valuemax={total}
-          aria-valuenow={index}
-        >
-          <div className="lp-progress-fill" style={{ width: `${(index / total) * 100}%` }} />
+        <div className="lp-topbar-main">
+          <p id={titleId} className="lp-title">
+            {lesson.title}
+          </p>
+          <div
+            className="lp-progress"
+            role="progressbar"
+            aria-label="課程進度"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={index}
+          >
+            <div className="lp-progress-fill" style={{ width: `${(index / total) * 100}%` }} />
+          </div>
         </div>
       </div>
-      <div key={`${index}-${inGuide ? 'guide' : attempt}`} ref={focusOnMount} tabIndex={-1} className="lp-stage">
+      {confirmingExit && <ExitConfirm onStay={stay} onLeave={onExit} />}
+      {/* 確認離開時只是先藏起來，不卸載：按「繼續上課」回來，作答到一半的狀態都還在。 */}
+      <div
+        key={`${index}-${inGuide ? 'guide' : attempt}`}
+        ref={focusOnMount}
+        tabIndex={-1}
+        className="lp-stage"
+        hidden={confirmingExit}
+      >
         {renderStep(step)}
       </div>
     </section>
