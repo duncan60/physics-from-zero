@@ -319,6 +319,40 @@ it('看解答後繼續，那一題沒有 XP', async () => {
   expect(onComplete).toHaveBeenCalledWith(15); // 10 + 選擇題的 5；看解答的數字題沒有
 });
 
+it('數字後面多打了單位：提示「只要填數字，不用寫單位」，不算答錯', async () => {
+  const { user } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  const input = screen.getByRole('textbox', { name: '3 減 0 是多少？' });
+  await user.type(input, '3公尺');
+  await user.click(button('檢查'));
+  expect(screen.getByText('只要填數字，不用寫單位')).toBeInTheDocument();
+  expect(screen.queryByText('請先輸入數字')).not.toBeInTheDocument();
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+  expect(input).toBeInvalid();
+  expect(input).toHaveAccessibleDescription(/只要填數字，不用寫單位/);
+
+  // 一改輸入，提示就消失；只填數字就答對，而且仍然算第一次就答對
+  await user.clear(input);
+  expect(screen.queryByText('只要填數字，不用寫單位')).not.toBeInTheDocument();
+  await user.type(input, '3');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+  expect(screen.getByText('本課獲得 20 XP')).toBeInTheDocument();
+});
+
+it('表格題的格子多打了單位，也提示「只要填數字，不用寫單位」', async () => {
+  const { user } = renderPlayer(tableLesson);
+  await user.type(screen.getByRole('textbox', { name: '速度，1 秒' }), '8 m/s');
+  await user.type(screen.getByRole('textbox', { name: '速度，2 秒' }), '6');
+  await user.click(button('檢查'));
+  expect(screen.getByText('只要填數字，不用寫單位')).toBeInTheDocument();
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+});
+
 it('中途按離開，只呼叫 onExit', async () => {
   const { user, onComplete, onExit } = renderPlayer(guidedLesson);
 
