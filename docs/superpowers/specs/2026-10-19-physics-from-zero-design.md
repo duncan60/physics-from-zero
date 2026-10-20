@@ -1,7 +1,7 @@
 # 從零開始學物理（physics-from-zero）設計文件
 
 日期：2026-10-19
-狀態：待 Duncan 確認文件
+狀態：已確認
 
 ## 1. 這是什麼、為什麼要做
 
@@ -62,7 +62,7 @@ Duncan 正在跟 Claude 從零學物理，基礎不好，一路上會答錯、�
 - 使用 GitHub Pages 免費上線，網址是 `https://duncan60.github.io/physics-from-zero/`。網站必須能在這個子路徑底下正常運作，包括重新整理頁面。
 - 純前端靜態網站，沒有伺服器。
 - 建立 repo 和推送都以 `duncan60` 的身分進行。Commit 的作者資訊見第 4 節，必須設在這個 repo 本身，不能使用電腦上的全域設定。
-- 程式碼放在 `~/Desktop/物理學習`（本文件所在的 repo 根目錄）。
+- 程式碼放在 repo 根目錄（也就是本文件所在的 repo）。
 
 ## 4. 已經決定的做法
 
@@ -73,8 +73,8 @@ Duncan 正在跟 Claude 從零學物理，基礎不好，一路上會答錯、�
 - **內容格式**：每課一個 TypeScript 資料檔，用型別檢查課程結構，寫錯格式時編譯就會失敗。（Claude 的判斷）
 - **測試**：用 Vitest 測試答案判斷、進度與連續天數計算，並驗證所有課程資料。（Claude 的判斷）
 - **授權**：程式碼採 MIT，課程內容採 CC BY-SA 4.0，讓別人可以自由使用和改編，但改編後也必須以相同方式分享。（Duncan 已確認）課程資料檔集中放在獨立的資料夾，並附上該資料夾自己的授權說明，與程式碼分開。
-- **Commit 作者**：只在這個 repo 設定 `user.name` 為 `duncan60`、`user.email` 為 `tmduncan60@gmail.com`，不使用電腦上的全域設定（那是公司信箱）。（Duncan 已確認）
-- **推送**：使用 SSH 主機別名 `duncan60-GitHub`，remote 設為 `git@duncan60-GitHub:duncan60/physics-from-zero.git`。
+- **Commit 作者**：只在這個 repo 設定 `user.name` 為 `duncan60`、`user.email` 為 `tmduncan60@gmail.com`，不使用電腦上的全域設定。（Duncan 已確認）
+- **推送**：使用 duncan60 自己的 SSH 憑證推送，remote 是 `git@github.com:duncan60/physics-from-zero.git`。
 - **署名**：README 和網站頁尾寫「由 duncan60 與 Claude 一起製作，課程來自真實的學習過程」，只使用 GitHub 帳號名稱，不寫真實姓名。（Claude 的判斷）
 - **README** 使用繁體中文，說明這個網站是什麼、怎麼在本機執行，以及怎麼新增一課。
 - 這份設計文件和之後的實作計畫，一起放在 repo 的 `docs/` 裡公開。

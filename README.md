@@ -1,6 +1,6 @@
 # 從零開始學物理（physics-from-zero）
 
-Duolingo 風格的物理入門網站。從零開始，一題一題學，答錯也沒關係，會有人一步一步帶你想通。
+Duolingo 風格的物理入門網站。從零開始，一題一題學，答錯也沒關係，網站會一步一步帶你想通。
 
 線上網址：<https://duncan60.github.io/physics-from-zero/>
 
@@ -17,7 +17,7 @@ Duolingo 風格的物理入門網站。從零開始，一題一題學，答錯�
 
 ## 在本機執行
 
-需要 Node.js 22 以上。
+需要 Node.js 22.13 以上（建議用 22 LTS）。
 
 ```bash
 npm install     # 安裝套件
@@ -25,6 +25,8 @@ npm run dev     # 開發模式，照著畫面上的網址用瀏覽器打開
 npm test        # 執行測試（包含檢查每一課的內容）
 npm run build   # 檢查型別並打包到 dist/
 ```
+
+推送到 `main` 分支後，GitHub Actions 會自動建置並部署到 GitHub Pages；`npm test` 沒有通過就不會部署。
 
 ## 新增一課
 
@@ -107,11 +109,13 @@ export const example: Lesson = {
 };
 ```
 
+這個例子只示範寫法，所以只有 3 個步驟；真正的一課要有 5 到 8 個步驟，`npm test` 會檢查。匯出的名稱（這裡是 `example`）可以自己取，在 `stations.ts` 匯入的就是這個名稱。
+
 ### 寫回饋的小訣竅
 
 現有的課程大多這樣寫答錯回饋：先說「你這部分想對了」，再指出卡住的那一步，最後丟一個小問題把人帶回來，而不是直接公布答案。真實學習時答錯的答案，就是最好的 `wrongAnswers` 和 `feedback`。
 
 ## 授權
 
-- 程式碼採用 MIT 授權，見 [`LICENSE`](LICENSE)。
-- 課程內容（`src/content/`）採用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant)，見 [`src/content/LICENSE.md`](src/content/LICENSE.md)。引用或改編時請標示出處，並以相同方式分享。
+- 程式碼採用 MIT 授權，見 [`LICENSE`](LICENSE)。`src/content/` 裡的程式也是：測試檔 `content.test.ts`，以及 `stations.ts` 裡的程式邏輯（例如 `findLesson`、`orderedLessonIds`）。
+- 課程內容採用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant)，見 [`src/content/LICENSE.md`](src/content/LICENSE.md)。課程內容指的是 `src/content/lessons/` 底下的每一課，以及 `stations.ts` 裡的站名和課程順序。引用或改編時請標示出處，並以相同方式分享。

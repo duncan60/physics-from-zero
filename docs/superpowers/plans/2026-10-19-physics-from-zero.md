@@ -17,7 +17,7 @@
 - 不做：帳號、登入、排行榜、後端、英文版。
 - 不得出現愛心、生命、倒數計時，答錯也不扣分。
 - 觀念卡內文總長度不超過 150 個字元，每一課 5 到 8 個步驟（引導步驟不算在內）。
-- Git：分支 `main`；只在這個 repo 設定 `user.name=duncan60`、`user.email=tmduncan60@gmail.com`，不可使用全域設定；remote 為 `git@duncan60-GitHub:duncan60/physics-from-zero.git`。
+- Git：分支 `main`；只在這個 repo 設定 `user.name=duncan60`、`user.email=tmduncan60@gmail.com`，不可使用全域設定；推送使用 duncan60 自己的 SSH 憑證，remote 為 `git@github.com:duncan60/physics-from-zero.git`。
 - gh 指令一律加上 `GH_TOKEN=$(gh auth token --user duncan60)`，不要切換 gh 目前作用中的帳號。
 - 授權：根目錄 `LICENSE` 用 MIT（`Copyright (c) 2026 duncan60`）；`src/content/LICENSE.md` 用 CC BY-SA 4.0。
 - 署名文字：「由 duncan60 與 Claude 一起製作，課程來自真實的學習過程」，只出現在 README 和頁尾。
@@ -95,7 +95,7 @@ src/
 - [ ] **Step 1：初始化 git，設定這個 repo 的身分**
 
 ```bash
-cd ~/Desktop/物理學習
+# 在 repo 根目錄執行
 git init -b main
 git config user.name duncan60
 git config user.email tmduncan60@gmail.com
@@ -623,7 +623,7 @@ git commit -m "docs: README 與 GitHub Pages 部署流程"
 
 ```bash
 GH_TOKEN=$(gh auth token --user duncan60) gh repo create duncan60/physics-from-zero --public --description "Duolingo 風格的物理入門網站，從零開始，一題一題學"
-git remote add origin git@duncan60-GitHub:duncan60/physics-from-zero.git
+git remote add origin git@github.com:duncan60/physics-from-zero.git
 git push -u origin main
 GH_TOKEN=$(gh auth token --user duncan60) gh api -X POST repos/duncan60/physics-from-zero/pages -f build_type=workflow
 ```
