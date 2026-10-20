@@ -474,6 +474,37 @@ it('配對：右欄依注入的亂數排序；配錯會恢復並使 onFinish(fal
   expect(clean).toHaveBeenCalledWith(true);
 });
 
+it('配對：配錯時連點第二塊，不會打斷錯誤標示，也不會把它選起來', async () => {
+  const user = setupUser();
+  const fast = userEvent.setup({ delay: null }); // 完全不等，模擬連點
+  render(<MatchCard step={matchStep} onFinish={vi.fn()} random={() => 0} />);
+  const accel = button('加速度');
+  const distRule = button('平均速度 × 時間');
+
+  await user.click(accel);
+  await fast.dblClick(distRule); // 第一下配錯，第二下落在正在閃的那一塊
+  expect(accel).toHaveClass('lp-match-item--wrong');
+  expect(distRule).toHaveClass('lp-match-item--wrong');
+  expect(distRule).toHaveAttribute('aria-pressed', 'false');
+
+  // 正在閃的另一塊也一樣不理會
+  await fast.click(accel);
+  expect(accel).toHaveClass('lp-match-item--wrong');
+  expect(accel).toHaveAttribute('aria-pressed', 'false');
+
+  // 約 600 ms 後兩塊都恢復成沒選的樣子
+  act(() => {
+    vi.advanceTimersByTime(600);
+  });
+  expect(accel).not.toHaveClass('lp-match-item--wrong');
+  expect(distRule).not.toHaveClass('lp-match-item--wrong');
+  expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true')).toEqual([]);
+
+  // 恢復之後照常可以選
+  await user.click(distRule);
+  expect(distRule).toHaveAttribute('aria-pressed', 'true');
+});
+
 it('LessonPlayer：一課裡混合 formula、slider、match 能一路走到完成', async () => {
   const lesson: Lesson = {
     id: 'test-new-kinds',

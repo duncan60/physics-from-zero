@@ -52,7 +52,9 @@ export function MatchCard(props: {
 
   function choose(side: Side, index: number): void {
     if (done || (side === 'left' ? matchedLeft : matchedRight)[index]) return;
-    // 錯誤標示還在時就點下一塊：立刻恢復，照常處理這一下。
+    // 正在閃錯誤標示的兩塊不理會：連點的第二下不會打斷「閃一下後恢復未選狀態」，也不會把它選起來。
+    if (wrong !== null && wrong[side] === index) return;
+    // 錯誤標示還在時點了別塊：立刻恢復，照常處理這一下。
     window.clearTimeout(wrongTimer.current);
     setWrong(null);
 
