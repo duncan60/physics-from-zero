@@ -36,6 +36,25 @@ interface AudioWindow {
   webkitAudioContext?: typeof AudioContext;
 }
 
+// iOS Safari 17+ 的 navigator.audioSession（TypeScript 的 DOM 型別還沒有）。
+interface AudioSessionNavigator {
+  audioSession?: { type: string };
+}
+
+/**
+ * iOS：把音效設成 'ambient'，和背景音樂混在一起播，不會把學習者正在聽的音樂暫停；
+ * 也會跟著靜音鍵。沒有這個 API 的瀏覽器什麼都不做，出錯也安靜失敗。
+ */
+function preferAmbientAudioSession(): void {
+  try {
+    if (typeof navigator === 'undefined') return;
+    const session = (navigator as unknown as AudioSessionNavigator).audioSession;
+    if (session) session.type = 'ambient';
+  } catch {
+    // 忽略：只影響 iOS 上和音樂混音的方式
+  }
+}
+
 /** 預設的 factory：瀏覽器有 Web Audio 就建立 AudioContext，否則回傳 null。 */
 function defaultFactory(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -76,6 +95,7 @@ export function createSoundPlayer(
   function getContext(): AudioContext | null {
     if (ctx) return ctx;
     if (unavailable) return null;
+    preferAmbientAudioSession(); // 建立 AudioContext 之前設定，第一個音就套用
     try {
       ctx = factory();
     } catch {
@@ -91,7 +111,8 @@ export function createSoundPlayer(
       try {
         const context = getContext();
         if (!context) return;
-        if (context.state === 'suspended') {
+        // 'suspended'（還沒被使用者啟動）或 iOS 的 'interrupted'（來電、Siri 打斷）都要 resume
+        if (context.state !== 'running') {
           try {
             // resume() 回傳 Promise；被拒絕也要接住
             void Promise.resolve(context.resume()).catch(() => {});

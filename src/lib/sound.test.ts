@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSoundPlayer, type SoundKind } from './sound';
 
 /** 假的 AudioContext：只記錄呼叫，不發出任何聲音。 */
-function makeFakeContext(initialState: AudioContextState = 'running') {
+// iOS Safari 被來電、Siri 打斷時，state 是 'interrupted'（不在 TypeScript 的 AudioContextState 裡）。
+function makeFakeContext(initialState: AudioContextState | 'interrupted' = 'running') {
   const oscillators: Array<{
     type: string;
     frequencySet: Array<[number, number]>;
@@ -206,6 +207,14 @@ describe('createSoundPlayer：有 AudioContext', () => {
     expect(running.ctx.resume).not.toHaveBeenCalled();
   });
 
+  it('context 是 interrupted（iOS 被來電打斷）時也會呼叫 resume，而且照樣排聲音', () => {
+    const interrupted = makeFakeContext('interrupted');
+    const player = createSoundPlayer(() => asContext(interrupted.ctx));
+    expect(() => player.play('correct')).not.toThrow();
+    expect(interrupted.ctx.resume).toHaveBeenCalledTimes(1);
+    expect(interrupted.oscillators.length).toBeGreaterThan(0);
+  });
+
   it('resume 同步拋出或回傳被拒絕的 Promise，都不會讓 play 拋出或產生未處理的拒絕', async () => {
     const throwing = makeFakeContext('suspended');
     throwing.ctx.resume.mockImplementation(() => {
@@ -219,5 +228,54 @@ describe('createSoundPlayer：有 AudioContext', () => {
     // 讓被拒絕的 Promise 有機會冒泡；若沒被接住，vitest 會把它當成未處理的錯誤
     await Promise.resolve();
     await Promise.resolve();
+  });
+});
+
+describe('createSoundPlayer：iOS 的 navigator.audioSession', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'audioSession');
+  });
+
+  function fakeAudioSession(session: object): void {
+    Object.defineProperty(navigator, 'audioSession', { configurable: true, value: session });
+  }
+
+  it('建立 AudioContext 時把 audioSession.type 設成 ambient（不會暫停學習者在聽的音樂），只設一次', () => {
+    const session = { type: 'auto' };
+    fakeAudioSession(session);
+    const { ctx, oscillators } = makeFakeContext();
+    const factory = vi.fn(() => asContext(ctx));
+    const player = createSoundPlayer(factory);
+    expect(session.type).toBe('auto'); // 還沒播之前不動
+    player.play('correct');
+    expect(session.type).toBe('ambient');
+    expect(oscillators.length).toBeGreaterThan(0);
+
+    session.type = 'playback'; // 之後不會再改回去
+    player.play('wrong');
+    expect(session.type).toBe('playback');
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it('設定 audioSession.type 時拋出例外：play 不會拋出，聲音照常排', () => {
+    fakeAudioSession({
+      get type() {
+        return 'auto';
+      },
+      set type(_value: string) {
+        throw new Error('不支援');
+      },
+    });
+    const { ctx, oscillators } = makeFakeContext();
+    const player = createSoundPlayer(() => asContext(ctx));
+    expect(() => player.play('correct')).not.toThrow();
+    expect(oscillators.length).toBeGreaterThan(0);
+  });
+
+  it('沒有 audioSession（大部分瀏覽器）：照常播放', () => {
+    expect('audioSession' in navigator).toBe(false);
+    const { ctx, oscillators } = makeFakeContext();
+    expect(() => createSoundPlayer(() => asContext(ctx)).play('complete')).not.toThrow();
+    expect(oscillators.length).toBeGreaterThan(0);
   });
 });

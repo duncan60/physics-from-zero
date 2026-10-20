@@ -363,8 +363,13 @@ button {
   }
 }
 
-/* 窄螢幕：拿掉標誌、字小一點，網站名稱和連續天數、XP 才排得進同一行（排不下時 XP 那組會換到下一行靠右）。 */
-@media (max-width: 400px) {
+/* 手機寬度（到 480px）：拿掉標誌、字和間距小一點、音效開關只留喇叭圖示（「音效：開／關」留給螢幕閱讀器），
+   網站名稱、連續天數、XP 和音效開關才排得進同一行（390–430px 都是）。數字很大排不下時，工具列換到下一行靠右。 */
+@media (max-width: 480px) {
+  .site-header-inner {
+    column-gap: 8px;
+  }
+
   .site-logo {
     display: none;
   }
@@ -373,12 +378,16 @@ button {
     font-size: 1.0625rem;
   }
 
+  .site-header-tools,
+  .stats {
+    gap: 4px;
+  }
+
   .stat {
     padding-inline: 5px 8px;
     font-size: 0.875rem;
   }
 
-  /* 只留喇叭圖示，「音效：開／關」留給螢幕閱讀器 */
   .sound-toggle {
     padding: 0;
   }
@@ -1289,6 +1298,11 @@ a.path-node:active .path-node-circle {
   margin-top: 0;
 }
 
+/* 整個拼算式的區域（含磚塊之間的空隙和空位）：快速連點不會被 iOS 當成雙擊放大 */
+.lp-formula {
+  touch-action: manipulation;
+}
+
 /* 答案列：拼好的磚塊依序排在這裡 */
 .lp-formula-row {
   display: flex;
@@ -1400,6 +1414,11 @@ a.path-node:active .path-node-circle {
 }
 
 /* ---- 拉滑桿 ---- */
+
+/* 整個滑桿區域：在標籤、刻度附近連點，不會被 iOS 當成雙擊放大 */
+.lp-slider {
+  touch-action: manipulation;
+}
 
 .lp-slider-head {
   display: flex;
@@ -1575,6 +1594,7 @@ a.path-node:active .path-node-circle {
   grid-auto-flow: column;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 12px;
+  touch-action: manipulation; /* 兩塊之間的空隙連點，也不會被 iOS 當成雙擊放大 */
 }
 
 .lp-match-item {
