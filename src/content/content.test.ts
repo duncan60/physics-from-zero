@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCells } from '../lib/answer';
-import { evaluateFormula, parseFormula, sameFormula } from '../lib/formula';
+import { checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
 import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step } from '../lib/types';
@@ -246,6 +246,27 @@ it.each([
   for (const wrong of wrongs) {
     expect(step.wrongForms?.some((w) => sameFormula(w.tokens, tokens(wrong))), `「${wrong}」沒有對應的回饋`).toBe(true);
   }
+});
+
+// 只省略「+ 0」或「− 0」的寫法是正確的物理，要算對（不懲罰正確的想法）；上課時真的寫錯的算式仍然是錯的，給那則回饋。
+it.each([
+  ['1-3', 'scooter-from-rest', '18 ÷ 6'],
+  ['1-5', 'bus-slide', '10 ÷ 2 × 5'],
+  ['1-5', 'bus-slide', '5 × 10 ÷ 2'],
+  ['1-5', 'bus-slide', '10 × 5 ÷ 2'],
+] as const)('%s 的 %s：省略 0 的「%s」也算對', (lessonId, stepId, formula) => {
+  const step = findStep(lessonId, stepId);
+  if (step?.kind !== 'formula') throw new Error(`${stepId} 不是拼算式`);
+  expect(checkFormula(step, tokens(formula))).toEqual({ correct: true });
+});
+
+it.each([
+  ['1-3', 'scooter-from-rest', '( 0 + 18 ) ÷ 6'],
+  ['1-5', 'bus-slide', '( 10 − 0 ) ÷ 2 × 5'],
+] as const)('%s 的 %s：真的寫錯過的「%s」仍然是錯的，而且有回饋', (lessonId, stepId, formula) => {
+  const step = findStep(lessonId, stepId);
+  if (step?.kind !== 'formula') throw new Error(`${stepId} 不是拼算式`);
+  expect(checkFormula(step, tokens(formula))).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
 });
 
 it('1-5 最後一步是公式配對，三對照 spec', () => {
