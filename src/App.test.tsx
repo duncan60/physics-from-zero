@@ -2,7 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-import { STORAGE_KEY, localDayKey } from './lib/progress';
+import { STORAGE_KEY, emptyProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
 import { parseHash } from './lib/router';
 
@@ -188,7 +188,7 @@ it('按「離開」回到地圖後，按上一頁不會回到這一課', async (
 });
 
 it('頁首顯示存起來的 XP 和連續天數；地圖標出已完成、目前這一課、鎖住', () => {
-  seedProgress({ version: 1, completed: ['1-1'], xp: 25, streak: 3, lastActiveDay: localDayKey(new Date()) });
+  seedProgress({ ...emptyProgress(), completed: ['1-1'], xp: 25, streak: 3, lastActiveDay: localDayKey(new Date()) });
   render(<App />);
 
   expect(screen.getByText('25 XP')).toBeInTheDocument();
@@ -205,7 +205,7 @@ it('頁首顯示存起來的 XP 和連續天數；地圖標出已完成、目前
 
 it('進度不連續時（例如以後課程順序改了），上過的課一定打得開', () => {
   // 只完成了 1-2：1-1 還沒上（目前這一課），1-3 因為 1-2 完成而解鎖，1-4 鎖住。
-  seedProgress({ version: 1, completed: ['1-2'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  seedProgress({ ...emptyProgress(), completed: ['1-2'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });
   window.location.hash = '#/lesson/1-2';
   render(<App />);
   // 1-2 照解鎖規則算是鎖住的（1-1 沒完成），但上過的課可以複習
@@ -214,7 +214,7 @@ it('進度不連續時（例如以後課程順序改了），上過的課一定�
 });
 
 it('進度不連續時，地圖只把第一個可以上的課標成目前這一課', () => {
-  seedProgress({ version: 1, completed: ['1-2'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  seedProgress({ ...emptyProgress(), completed: ['1-2'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });
   render(<App />);
   expect(screen.getByRole('link', { name: /慣性/ })).toHaveAttribute('aria-current', 'step');
   expect(screen.getByRole('link', { name: /速度與位置/ })).toHaveTextContent('已完成');
@@ -228,14 +228,14 @@ it('進度不連續時，地圖只把第一個可以上的課標成目前這一�
 it('最後一次學習是三天前，連續天數顯示 0', () => {
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-  seedProgress({ version: 1, completed: ['1-1'], xp: 10, streak: 5, lastActiveDay: localDayKey(threeDaysAgo) });
+  seedProgress({ ...emptyProgress(), completed: ['1-1'], xp: 10, streak: 5, lastActiveDay: localDayKey(threeDaysAgo) });
   render(<App />);
   expect(screen.getByText('連續 0 天')).toBeInTheDocument();
   expect(screen.getByText('10 XP')).toBeInTheDocument();
 });
 
 it('重新整理已解鎖的課程網址，直接進入那一課', () => {
-  seedProgress({ version: 1, completed: ['1-1'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  seedProgress({ ...emptyProgress(), completed: ['1-1'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });
   window.location.hash = '#/lesson/1-2';
   render(<App />);
   expect(screen.getByRole('region', { name: '速度與位置' })).toBeInTheDocument();

@@ -100,13 +100,13 @@ it('上完一課：完成畫面一出現就存檔、頁首更新；按「回到�
   // 存檔、更新頁首，但不換頁：學習者還在看完成畫面
   expect(window.location.hash).toBe('#/lesson/1-1');
   expect(screen.getByRole('heading', { name: '假的完成畫面' })).toBeInTheDocument();
-  expect(storedProgress()).toEqual({ version: 1, completed: ['1-1'], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1'], perfect: [], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
   expect(screen.getByText('15 XP')).toBeInTheDocument();
   expect(screen.getByText('連續 1 天')).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: '回到地圖' }));
   expect(window.location.hash).toBe('#/');
-  expect(storedProgress()).toEqual({ version: 1, completed: ['1-1'], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1'], perfect: [], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
   expect(screen.getByText('15 XP')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('已完成');
   const next = screen.getByRole('link', { name: /速度與位置/ });
@@ -130,13 +130,14 @@ it('看到完成畫面後沒按「回到地圖」，直接按上一頁：進度�
 
   await goBack();
   expect(screen.queryByRole('heading', { name: '假的完成畫面' })).not.toBeInTheDocument();
-  expect(storedProgress()).toEqual({ version: 1, completed: ['1-1'], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1'], perfect: [], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
   expect(screen.getByText('15 XP')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('已完成');
   expect(screen.getByRole('link', { name: /速度與位置/ })).toHaveTextContent('可以上');
 });
 
-it('再上一次已完成的課：XP 照加，completed 不重複', async () => {
+it('再上一次已完成的課：XP 照加，completed 不重複（舊版的存檔也先轉成版本 2）', async () => {
+  // 刻意存成版本 1 的舊格式：上完課存回去後要變成版本 2，已完成的課、XP、連續天數都還在
   window.localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({ version: 1, completed: ['1-1'], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()) }),
@@ -147,7 +148,7 @@ it('再上一次已完成的課：XP 照加，completed 不重複', async () => 
   await user.click(screen.getByRole('link', { name: /慣性/ }));
   await user.click(screen.getByRole('button', { name: '假裝上完' }));
 
-  expect(storedProgress()).toEqual({ version: 1, completed: ['1-1'], xp: 30, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1'], perfect: [], xp: 30, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
   expect(screen.getByText('30 XP')).toBeInTheDocument();
   expect(screen.getByText('連續 1 天')).toBeInTheDocument();
 });
@@ -204,7 +205,7 @@ it('沒收到 storage 事件的舊分頁上完一課，不會蓋掉另一個分�
   otherTabCompletes('1-2', 15, { notify: false });
 
   await user.click(screen.getByRole('button', { name: '假裝上完' }));
-  expect(storedProgress()).toEqual({ version: 1, completed: ['1-1', '1-2'], xp: 45, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1', '1-2'], perfect: [], xp: 45, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
   expect(screen.getByText('45 XP')).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: '回到地圖' }));
