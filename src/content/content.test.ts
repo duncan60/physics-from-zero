@@ -269,6 +269,39 @@ it.each([
   expect(checkFormula(step, tokens(formula))).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
 });
 
+// bus-slide 有好幾種順序都算對（先算平均速度、先乘時間、省略 + 0），回饋不能假設學習者拼的是哪一種。
+it('1-5 bus-slide 拼成「10 − 0」：回饋不稱讚學習者不一定拼過的順序，也不直接說出要用「+」', () => {
+  const step = findStep('1-5', 'bus-slide');
+  if (step?.kind !== 'formula') throw new Error('bus-slide 不是拼算式');
+  for (const formula of ['( 10 − 0 ) ÷ 2 × 5', '5 × ( 10 − 0 ) ÷ 2']) {
+    const result = checkFormula(step, tokens(formula));
+    const feedback = result.correct ? '' : (result.feedback ?? '');
+    expect(feedback, formula).toMatch(/\S/);
+    expect(feedback, formula).not.toMatch(/順序/);
+    expect(feedback, formula).not.toMatch(/加上 0|\+ 0/);
+  }
+});
+
+it('1-5 bus-slide 第 2 步答 50、2 的回饋：不引用某一種算式，也不說「先…再…」', () => {
+  const step = findStep('1-5', 'bus-slide');
+  if (step?.kind !== 'formula') throw new Error('bus-slide 不是拼算式');
+  for (const value of [50, 2]) {
+    const feedback = step.wrongAnswers?.find((wrong) => wrong.value === value)?.feedback ?? '';
+    expect(feedback, String(value)).toMatch(/\S/);
+    expect(feedback, String(value)).not.toMatch(/\(\s*10/);
+    expect(feedback, String(value)).not.toMatch(/先.*再/);
+  }
+});
+
+it('1-5 scooter-average 的引導：題目和說明寫的是同一個順序 (6 + 18)', () => {
+  const step = findStep('1-5', 'scooter-average');
+  const count = step?.kind === 'formula' ? step.guide?.find((g) => g.id === 'scooter-average-count') : undefined;
+  if (count?.kind !== 'number') throw new Error('找不到 scooter-average-count');
+  expect(count.prompt).toContain('(6 + 18)');
+  expect(count.explanation).toContain('(6 + 18)');
+  expect(`${count.prompt}${count.explanation}`).not.toContain('(18 + 6)');
+});
+
 it('1-5 最後一步是公式配對，三對照 spec', () => {
   const steps = findLesson('1-5')?.steps ?? [];
   expect(steps).toHaveLength(8);
