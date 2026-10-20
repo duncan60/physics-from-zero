@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Lesson } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
@@ -108,13 +109,16 @@ const simLesson: Lesson = {
 // `user` 每個動作的前後都會等 SETTLE_MS，像一般人一樣按；`fast` 完全不等，用來模擬連點。
 const SETTLE_MS = 500;
 
-function renderPlayer(lesson: Lesson) {
+/** `strict`：包在 <StrictMode> 裡（和 main.tsx 一樣），開發模式下 effect 會多跑一次。 */
+function renderPlayer(lesson: Lesson, options: { strict?: boolean } = {}) {
   const onComplete = vi.fn();
   const onExit = vi.fn();
   const user = userEvent.setup({ delay: SETTLE_MS, advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
   const fast = userEvent.setup({ delay: null });
-  render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} />);
-  return { user, fast, onComplete, onExit };
+  const { rerender } = render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} />, {
+    wrapper: options.strict === true ? StrictMode : undefined,
+  });
+  return { user, fast, onComplete, onExit, rerender };
 }
 
 /** 讓時間經過，等過防連點的時間。 */
@@ -181,13 +185,69 @@ it('完整流程：答錯 → 引導 → 重答 → 完成，並計算 XP', asyn
   expect(screen.getByText('答對了')).toBeInTheDocument();
   await user.click(button('繼續'));
 
-  // 看到「完成這一課」，按「回到地圖」
+  // 看到「完成這一課」：完成畫面一出現就回報（App 在這時存檔），不等學習者按「回到地圖」
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
   expect(screen.getByText('本課獲得 15 XP')).toBeInTheDocument();
-  expect(onComplete).not.toHaveBeenCalled();
-  await user.click(button('回到地圖'));
   expect(onComplete).toHaveBeenCalledTimes(1);
   expect(onComplete).toHaveBeenCalledWith(15); // 10 + 只有數字題第一次就答對的 5
+  expect(onExit).not.toHaveBeenCalled();
+
+  // 「回到地圖」只負責離開（和「離開」一樣走 onExit），不會再回報一次
+  await user.click(button('回到地圖'));
+  expect(onExit).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledTimes(1);
+});
+
+type User = ReturnType<typeof userEvent.setup>;
+
+/** plainLesson 兩題都第一次就答對，停在完成畫面。最後一下「繼續」用 `fast` 按，按完不等，還在完成畫面的防連點時間內。 */
+async function playPlainLesson(user: User, fast: User): Promise<void> {
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  await user.type(screen.getByRole('textbox', { name: '3 減 0 是多少？' }), '3');
+  await user.click(button('檢查'));
+  await fast.click(button('繼續'));
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+}
+
+it('完成畫面重新渲染、換了新的 onComplete、按「回到地圖」，都只回報一次', async () => {
+  const { user, fast, onComplete, onExit, rerender } = renderPlayer(plainLesson);
+  await playPlainLesson(user, fast);
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith(20);
+
+  // 最後一下「繼續」連點到「回到地圖」：還在防連點的時間內，不會離開完成畫面，但進度已經回報了
+  await fast.click(button('回到地圖'));
+  expect(onExit).not.toHaveBeenCalled();
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+
+  // App 存檔、頁首更新時會重新渲染，每次都傳一個新的 onComplete
+  const later = vi.fn();
+  rerender(<LessonPlayer lesson={plainLesson} onComplete={later} onExit={onExit} />);
+  rerender(<LessonPlayer lesson={plainLesson} onComplete={(xp) => later(xp)} onExit={onExit} />);
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(screen.getByText('本課獲得 20 XP')).toBeInTheDocument();
+
+  settle();
+  await user.click(button('回到地圖'));
+  expect(onExit).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(later).not.toHaveBeenCalled();
+});
+
+it('StrictMode 底下（effect 會多跑一次）也只回報一次', async () => {
+  const { user, fast, onComplete } = renderPlayer(plainLesson, { strict: true });
+  await playPlainLesson(user, fast);
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith(20);
+});
+
+it('一打開就是完成畫面（沒有步驟），StrictMode 底下也只回報一次', () => {
+  const { onComplete, onExit } = renderPlayer({ id: 'test-empty', title: '沒有步驟', steps: [] }, { strict: true });
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith(10);
   expect(onExit).not.toHaveBeenCalled();
 });
 

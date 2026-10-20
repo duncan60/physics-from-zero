@@ -70,15 +70,16 @@ export default function App(): React.JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
   useRouteChangeFocusAndScroll(routeKey(route), mainRef);
 
-  // 上完一課、按「離開」、找不到或還沒解鎖時的「回到地圖」：取代這一筆瀏覽紀錄，
+  // 完成畫面的「回到地圖」、中途按「離開」、找不到或還沒解鎖時的「回到地圖」：取代這一筆瀏覽紀錄，
   // 不然上一頁會重新打開剛上完（或剛離開）的課。從地圖打開一課則照常新增一筆。
   const backToMap = (): void => navigate({ name: 'map' }, { replace: true });
 
+  // 完成畫面一出現，LessonPlayer 就會呼叫這裡（只呼叫一次）：存檔、更新頁首，但不換頁，學習者還在看完成畫面。
+  // 之後按「回到地圖」走 onExit；直接按上一頁或關掉分頁，進度也已經存好了。
   function finishLesson(lessonId: string, xpGained: number): void {
     const next = completeLesson(progress, lessonId, xpGained, localDayKey(new Date()));
     saveProgress(getStorage(), next); // 存不進去也沒關係，這次的進度仍然留在畫面上
     setProgress(next);
-    backToMap();
   }
 
   function renderPage(): React.JSX.Element {

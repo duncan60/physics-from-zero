@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { XP_PER_FIRST_TRY, XP_PER_LESSON } from '../lib/progress';
 import type { Lesson, SimStep, Step } from '../lib/types';
 import { BusBallSim } from '../sims/BusBallSim';
@@ -9,7 +9,12 @@ import { useActionGuard } from './useActionGuard';
 
 interface Props {
   lesson: Lesson;
+  /**
+   * 完成畫面一出現就呼叫，整個上課過程只呼叫一次。不等學習者按「回到地圖」：
+   * 看到完成畫面後直接按上一頁、用返回手勢或關掉分頁，這一課也已經算完成。
+   */
   onComplete: (xpGained: number) => void;
+  /** 中途按「離開」，或在完成畫面按「回到地圖」。 */
   onExit: () => void;
 }
 
@@ -60,12 +65,21 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
   const [guided, setGuided] = useState(false);
   const [firstTryCount, setFirstTryCount] = useState(0);
   const reported = useRef(false);
-  // 完成畫面的「回到地圖」：最後一題連點「繼續」時，不會一路按出這一課。
+  // 完成畫面的「回到地圖」：最後一題連點「繼續」時，不會一路按出這一課（進度在完成畫面出現時就回報了）。
   const guard = useActionGuard(index);
 
   const total = lesson.steps.length;
   const step = lesson.steps[index] as Step | undefined;
   const xp = XP_PER_LESSON + firstTryCount * XP_PER_FIRST_TRY;
+  const finished = step === undefined;
+
+  // 完成畫面一出現就回報。reported 保證只回報一次：完成畫面重新渲染（App 每次都傳新的 onComplete）、
+  // StrictMode 在開發模式多跑一次 effect，都不會再算一次。
+  useEffect(() => {
+    if (!finished || reported.current) return;
+    reported.current = true;
+    onComplete(xp);
+  }, [finished, xp, onComplete]);
 
   function advance(): void {
     setIndex((i) => i + 1);
@@ -89,12 +103,6 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
     setAttempt((n) => n + 1);
   }
 
-  function finishLesson(): void {
-    if (reported.current) return; // 連按兩下也只算一次
-    reported.current = true;
-    onComplete(xp);
-  }
-
   if (step === undefined) {
     return (
       <section className="lp-player" aria-label={lesson.title}>
@@ -102,7 +110,7 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
           <h2 className="lp-complete-title">完成這一課</h2>
           <p className="lp-complete-xp">{`本課獲得 ${xp} XP`}</p>
           <div className="lp-actions">
-            <button type="button" className="lp-button lp-button--primary" onClick={guard(finishLesson)}>
+            <button type="button" className="lp-button lp-button--primary" onClick={guard(onExit)}>
               回到地圖
             </button>
           </div>
