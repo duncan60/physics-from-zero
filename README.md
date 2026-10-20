@@ -32,7 +32,7 @@ npm run build   # 檢查型別並打包到 dist/
 
 課程都是 `src/content/lessons/` 底下的 TypeScript 檔案，不用改畫面的程式碼。
 
-1. 在 `src/content/lessons/` 新增一個檔案，例如 `1-5-my-lesson.ts`，匯出一個 `Lesson`（可以參考 `1-2-speed-position.ts`）。
+1. 在 `src/content/lessons/` 新增一個檔案，例如 `1-6-my-lesson.ts`，匯出一個 `Lesson`（可以參考 `1-2-speed-position.ts`）。
 2. 在 `src/content/stations.ts` 匯入它，放進對應那一站的 `lessons`。
 3. 執行 `npm test`。`src/content/content.test.ts` 會幫你檢查：
    - 每課 5 到 8 個步驟，步驟 id 不重複。
@@ -60,7 +60,7 @@ npm run build   # 檢查型別並打包到 dist/
 import type { Lesson } from '../../lib/types';
 
 export const example: Lesson = {
-  id: '1-5',
+  id: '1-6',
   title: '走了多遠',
   steps: [
     {

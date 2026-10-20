@@ -44,9 +44,9 @@ function assertAnswerable(s: QuestionStep): void {
   }
 }
 
-it('有 7 站，第 1 站有 4 課', () => {
+it('有 7 站，第 1 站有 5 課', () => {
   expect(stations).toHaveLength(7);
-  expect(stations[0].lessons.map((l) => l.id)).toEqual(['1-1', '1-2', '1-3', '1-4']);
+  expect(stations[0].lessons.map((l) => l.id)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5']);
 });
 
 it('各站的 id 和標題依照 spec 的順序，只有第 1 站有課程', () => {
@@ -56,7 +56,7 @@ it('各站的 id 和標題依照 spec 的順序，只有第 1 站有課程', () 
 });
 
 it('第 1 站的課程標題', () => {
-  expect(stations[0].lessons.map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球']);
+  expect(stations[0].lessons.map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高']);
 });
 
 it('orderedLessonIds 與各站課程一致', () => expect(orderedLessonIds).toEqual(lessons.map((l) => l.id)));
