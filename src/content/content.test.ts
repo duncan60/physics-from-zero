@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCells } from '../lib/answer';
+import { isLessonUnlocked } from '../lib/progress';
 import type { ConceptStep, GuideStep, Lesson, QuestionStep, Step } from '../lib/types';
 import { findLesson, orderedLessonIds, stations } from './stations';
 
@@ -49,17 +50,34 @@ it('有 7 站，第 1 站有 5 課', () => {
   expect(stations[0].lessons.map((l) => l.id)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5']);
 });
 
-it('各站的 id 和標題依照 spec 的順序，只有第 1 站有課程', () => {
+it('第 2 站有 1 課', () => {
+  expect(stations[1].lessons.map((l) => l.id)).toEqual(['2-1']);
+});
+
+it('各站的 id 和標題依照 spec 的順序，只有第 1、2 站有課程', () => {
   expect(stations.map((s) => s.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   expect(stations.map((s) => s.title)).toEqual(['運動', '力與牛頓定律', '能量與動量', '波動、聲音與熱', '電與磁', '光', '近代物理']);
-  expect(stations.slice(1).every((s) => s.lessons.length === 0)).toBe(true);
+  expect(stations.slice(2).every((s) => s.lessons.length === 0)).toBe(true);
 });
 
 it('第 1 站的課程標題', () => {
   expect(stations[0].lessons.map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高']);
 });
 
+it('第 2 站的課程標題', () => {
+  expect(stations[1].lessons.map((l) => l.title)).toEqual(['力與加速度']);
+});
+
 it('orderedLessonIds 與各站課程一致', () => expect(orderedLessonIds).toEqual(lessons.map((l) => l.id)));
+
+it('跨站也依序解鎖：第 1 站最後一課完成，才解鎖第 2 站的第一課', () => {
+  const station1 = stations[0].lessons.map((l) => l.id);
+  const lastOfStation1 = station1[station1.length - 1];
+  const firstOfStation2 = stations[1].lessons[0].id;
+  expect(orderedLessonIds.indexOf(firstOfStation2)).toBe(orderedLessonIds.indexOf(lastOfStation1) + 1);
+  expect(isLessonUnlocked(orderedLessonIds, station1.slice(0, -1), firstOfStation2)).toBe(false);
+  expect(isLessonUnlocked(orderedLessonIds, station1, firstOfStation2)).toBe(true);
+});
 
 it('課程 id 不重複', () => expect(new Set(orderedLessonIds).size).toBe(orderedLessonIds.length));
 

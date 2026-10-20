@@ -6,7 +6,7 @@ import { STORAGE_KEY, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
 import { parseHash } from './lib/router';
 
-// 這個檔案用真實的課程資料（第 1 站有 4 課，其他站還沒有課）。
+// 這個檔案用真實的課程資料（第 1 站有 5 課，第 2 站有 1 課，其他站還沒有課）。
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -63,7 +63,7 @@ it('parseHash', () => {
   expect(parseHash('#/lesson/%E4')).toEqual({ name: 'map' }); // 壞掉的編碼
 });
 
-it('地圖：第一課可以上，第二課鎖住，第 2 站即將推出', () => {
+it('地圖：第一課可以上，第二課鎖住，第 2 站的課鎖住，第 3 站即將推出', () => {
   render(<App />);
 
   const first = screen.getByRole('link', { name: /慣性/ });
@@ -78,9 +78,14 @@ it('地圖：第一課可以上，第二課鎖住，第 2 站即將推出', () =
 
   const station1 = screen.getByRole('region', { name: /運動/ });
   expect(within(station1).queryByText('即將推出')).not.toBeInTheDocument();
+  // 第 2 站已經有課：畫出路線，但還沒上完第 1 站，課是鎖住的
   const station2 = screen.getByRole('region', { name: /力與牛頓定律/ });
-  expect(within(station2).getByText('即將推出')).toBeInTheDocument();
+  expect(within(station2).queryByText('即將推出')).not.toBeInTheDocument();
+  expect(within(station2).getByText('力與加速度').closest('li')).toHaveTextContent('鎖住');
   expect(within(station2).queryByRole('link')).not.toBeInTheDocument();
+  const station3 = screen.getByRole('region', { name: /能量與動量/ });
+  expect(within(station3).getByText('即將推出')).toBeInTheDocument();
+  expect(within(station3).queryByRole('link')).not.toBeInTheDocument();
   // 7 站都有標題
   expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(7);
 });
