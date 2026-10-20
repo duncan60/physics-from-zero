@@ -3,7 +3,9 @@ import type { RefObject } from 'react';
 import { Footer } from './components/Footer';
 import { Header } from './components/Header';
 import { LessonPlayer } from './components/LessonPlayer';
+import type { LessonResult } from './components/LessonPlayer';
 import { PathMap, canOpenLesson } from './components/PathMap';
+import { SoundProvider } from './components/SoundContext';
 import { findLesson } from './content/stations';
 import {
   STORAGE_KEY,
@@ -14,6 +16,7 @@ import {
   localDayKey,
   mergeProgress,
   saveProgress,
+  setSoundOn,
 } from './lib/progress';
 import type { Progress } from './lib/progress';
 import { useHashRoute } from './lib/router';
@@ -81,10 +84,16 @@ export default function App(): React.JSX.Element {
 
   // 同時開了好幾個分頁：別的分頁存了進度，瀏覽器會在這個分頁發出 storage 事件（寫入的分頁自己收不到）。
   // 合併進來，頁首和地圖跟著更新。合併只會增加不會減少，所以別處清掉儲存空間也不會讓畫面上的進度消失。
+  // 音效開關沒有「增加」可言：存進去的是別的分頁剛選的，照著改（儲存空間被清掉時沒有人選過，維持這個分頁的設定）。
   useEffect(() => {
     function onStorage(event: StorageEvent): void {
       if (event.key !== STORAGE_KEY) return;
-      setProgress((current) => mergeProgress(current, loadProgress(getStorage())));
+      const stored = loadProgress(getStorage());
+      const chosenElsewhere = event.newValue !== null;
+      setProgress((current) => {
+        const merged = mergeProgress(current, stored);
+        return chosenElsewhere ? setSoundOn(merged, stored.soundOn) : merged;
+      });
     }
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -99,11 +108,21 @@ export default function App(): React.JSX.Element {
   // 存檔前先和儲存空間裡最新的進度合併：分頁在背景被凍結時可能沒收到 storage 事件，
   // 直接用這個分頁記得的舊進度存檔，會蓋掉別的分頁這段時間完成的課和 XP。
   // 合併而不是直接改用讀回來的：存不進去（空間滿了）時，讀回來的是空的，這個分頁記得的進度不能丟。
-  function finishLesson(lessonId: string, xpGained: number): void {
+  function finishLesson(lessonId: string, result: LessonResult): void {
     const storage = getStorage();
     const latest = mergeProgress(progress, loadProgress(storage));
-    const next = completeLesson(latest, lessonId, xpGained, localDayKey(new Date()));
+    const next = completeLesson(latest, lessonId, result.xp, localDayKey(new Date()), result.perfect);
     saveProgress(storage, next); // 存不進去也沒關係，這次的進度仍然留在畫面上
+    setProgress(next);
+  }
+
+  // 頁首的音效開關：立刻生效並記住。和 finishLesson 一樣先和儲存空間裡最新的進度合併再存，
+  // 沒收到 storage 事件的舊分頁切換音效，才不會蓋掉別的分頁完成的課和 XP。儲存空間不能用時，只在這個分頁切換。
+  function toggleSound(): void {
+    const storage = getStorage();
+    const latest = mergeProgress(progress, loadProgress(storage));
+    const next = setSoundOn(latest, !progress.soundOn);
+    saveProgress(storage, next);
     setProgress(next);
   }
 
@@ -116,17 +135,24 @@ export default function App(): React.JSX.Element {
     if (!canOpenLesson(progress, lesson.id)) {
       return <Notice kind="locked" message="這一課還沒解鎖，先完成前面的課" onBack={backToMap} />;
     }
-    return <LessonPlayer lesson={lesson} onComplete={(xp) => finishLesson(lesson.id, xp)} onExit={backToMap} />;
+    return <LessonPlayer lesson={lesson} onComplete={(result) => finishLesson(lesson.id, result)} onExit={backToMap} />;
   }
 
   return (
-    <div className="app">
-      <Header xp={progress.xp} streak={displayedStreak(progress, localDayKey(new Date()))} />
-      {/* tabIndex={-1}：換頁時可以用程式把焦點移到這裡（Tab 鍵不會停在這裡） */}
-      <main ref={mainRef} className="site-main" tabIndex={-1}>
-        <div className="container">{renderPage()}</div>
-      </main>
-      <Footer />
-    </div>
+    <SoundProvider enabled={progress.soundOn}>
+      <div className="app">
+        <Header
+          xp={progress.xp}
+          streak={displayedStreak(progress, localDayKey(new Date()))}
+          soundOn={progress.soundOn}
+          onToggleSound={toggleSound}
+        />
+        {/* tabIndex={-1}：換頁時可以用程式把焦點移到這裡（Tab 鍵不會停在這裡） */}
+        <main ref={mainRef} className="site-main" tabIndex={-1}>
+          <div className="container">{renderPage()}</div>
+        </main>
+        <Footer />
+      </div>
+    </SoundProvider>
   );
 }

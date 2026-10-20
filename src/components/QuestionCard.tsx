@@ -3,7 +3,7 @@ import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber } 
 import type { CheckResult } from '../lib/answer';
 import { checkFormula } from '../lib/formula';
 import { checkSlider } from '../lib/slider';
-import type { QuestionStep } from '../lib/types';
+import type { CheckOutcome, QuestionStep } from '../lib/types';
 import { CartAnim } from './sims/CartAnim';
 import { ChoiceInput } from './steps/ChoiceInput';
 import { FormulaInput } from './steps/FormulaInput';
@@ -50,13 +50,14 @@ function solutionLines(step: QuestionStep): string[] {
  * 拼算式分兩步：先拼算式（拼對了才出現第 2 步），再填算出來的數字；兩步都在「作答中」這個階段裡。
  * `onFinish(cleanFirstTry)`：第一次檢查就答對、也沒有看解答時是 true（拼算式要兩步都第一次就對）。輸入無效不算一次作答。
  * 只有同時傳入 `onRequestGuide`、題目也有 `guide` 時，答錯才會出現「一步一步來」；否則是「再試一次」。
- * `onCheck()`：每次按「檢查」、答案有效（不論對錯）時呼叫。
+ * `onCheck(outcome)`：每次按「檢查」、答案有效（不論對錯）時呼叫，告訴外面這次的結果：
+ * 答對是 'correct'、答錯是 'wrong'；拼算式第 1 步拼對了（還要算答案）是 'partial'。
  */
 export function QuestionCard(props: {
   step: QuestionStep;
   onFinish: (cleanFirstTry: boolean) => void;
   onRequestGuide?: () => void;
-  onCheck?: () => void;
+  onCheck?: (outcome: CheckOutcome) => void;
 }): React.JSX.Element {
   const { step, onFinish, onRequestGuide, onCheck } = props;
   const promptId = useId();
@@ -151,15 +152,17 @@ export function QuestionCard(props: {
       return;
     }
     setHint(null);
-    onCheck?.();
     if (result.correct && step.kind === 'formula' && !formulaDone) {
+      onCheck?.('partial');
       setFormulaDone(true); // 算式對了，還在作答中：接著算答案
       return;
     }
     if (result.correct) {
+      onCheck?.('correct');
       setPhase('correct');
       return;
     }
+    onCheck?.('wrong');
     setHadWrong(true);
     setFeedback(result.feedback ?? null);
     setPhase('wrong');

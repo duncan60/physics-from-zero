@@ -1,9 +1,12 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { SoundKind } from '../lib/sound';
 import type { Lesson } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
+import { SoundProvider } from './SoundContext';
 
 // 測試專用的課程資料，不依賴真實內容。
 
@@ -105,20 +108,78 @@ const simLesson: Lesson = {
   ],
 };
 
+/** 數字題 n + n（答案 2n）。 */
+function doubleStep(n: number): Lesson['steps'][number] {
+  return { kind: 'number', id: `double-${n}`, prompt: `${n} + ${n} 是多少？`, answer: 2 * n, explanation: `${n} + ${n} = ${2 * n}。` };
+}
+
+/** 測連續答對：三題 → 觀念卡 → 兩題。 */
+const comboLesson: Lesson = {
+  id: 'test-combo',
+  title: '測試連續答對',
+  steps: [doubleStep(1), doubleStep(2), doubleStep(3), { kind: 'concept', id: 'pause', body: ['休息一下。'] }, doubleStep(4), doubleStep(5)],
+};
+
 // 按鈕在畫面換了之後的一小段時間內不會有反應（防連點，約 400 ms），所以測試用假的時鐘：
 // `user` 每個動作的前後都會等 SETTLE_MS，像一般人一樣按；`fast` 完全不等，用來模擬連點。
 const SETTLE_MS = 500;
 
-/** `strict`：包在 <StrictMode> 裡（和 main.tsx 一樣），開發模式下 effect 會多跑一次。 */
-function renderPlayer(lesson: Lesson, options: { strict?: boolean } = {}) {
+interface RenderOptions {
+  /** 包在 <StrictMode> 裡（和 main.tsx 一樣），開發模式下 effect 會多跑一次。 */
+  strict?: boolean;
+  /** 包在 <SoundProvider> 裡，用假的播放器（不會真的發出聲音）。沒給就沒有 SoundProvider（安靜）。 */
+  sound?: { enabled: boolean; player: { play(kind: SoundKind): void } };
+  /** 假的時鐘（毫秒），用來控制完成畫面上的「花了多久」。 */
+  now?: () => number;
+}
+
+function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
   const onComplete = vi.fn();
   const onExit = vi.fn();
   const user = userEvent.setup({ delay: SETTLE_MS, advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
   const fast = userEvent.setup({ delay: null });
-  const { rerender } = render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} />, {
-    wrapper: options.strict === true ? StrictMode : undefined,
+  const { strict, sound, now } = options;
+  function Wrapper(props: { children: ReactNode }): React.JSX.Element {
+    const inner =
+      sound === undefined ? (
+        props.children
+      ) : (
+        <SoundProvider enabled={sound.enabled} player={sound.player}>
+          {props.children}
+        </SoundProvider>
+      );
+    return strict === true ? <StrictMode>{inner}</StrictMode> : <>{inner}</>;
+  }
+  const { rerender, unmount } = render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} now={now} />, {
+    wrapper: Wrapper,
   });
-  return { user, fast, onComplete, onExit, rerender };
+  return { user, fast, onComplete, onExit, rerender, unmount };
+}
+
+/** 假的時鐘：`clock.now()` 回傳 `clock.time`，測試直接改 `clock.time`。 */
+function fakeClock(): { time: number; now: () => number } {
+  const clock = { time: 0, now: () => clock.time };
+  return clock;
+}
+
+/** 假的音效播放器：只記錄播了什麼。 */
+function fakePlayer(): { play: ReturnType<typeof vi.fn<(kind: SoundKind) => void>>; kinds: () => SoundKind[] } {
+  const play = vi.fn<(kind: SoundKind) => void>();
+  return { play, kinds: () => play.mock.calls.map(([kind]) => kind) };
+}
+
+function mockReducedMotion(): void {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
 }
 
 /** 讓時間經過，等過防連點的時間。 */
@@ -189,7 +250,8 @@ it('完整流程：答錯 → 引導 → 重答 → 完成，並計算 XP', asyn
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
   expect(screen.getByText('本課獲得 15 XP')).toBeInTheDocument();
   expect(onComplete).toHaveBeenCalledTimes(1);
-  expect(onComplete).toHaveBeenCalledWith(15); // 10 + 只有數字題第一次就答對的 5
+  // 10 + 只有數字題第一次就答對的 5；兩題只有一題一次答對，正確率 50%，不是完美
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 15, perfect: false, accuracy: 50 }));
   expect(onExit).not.toHaveBeenCalled();
 
   // 「回到地圖」只負責離開（和「離開」一樣走 onExit），不會再回報一次
@@ -215,7 +277,7 @@ it('完成畫面重新渲染、換了新的 onComplete、按「回到地圖」�
   const { user, fast, onComplete, onExit, rerender } = renderPlayer(plainLesson);
   await playPlainLesson(user, fast);
   expect(onComplete).toHaveBeenCalledTimes(1);
-  expect(onComplete).toHaveBeenCalledWith(20);
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 25, perfect: true })); // 10 + 5 + 5 + 完美 5
 
   // 最後一下「繼續」連點到「回到地圖」：還在防連點的時間內，不會離開完成畫面，但進度已經回報了
   await fast.click(button('回到地圖'));
@@ -225,9 +287,9 @@ it('完成畫面重新渲染、換了新的 onComplete、按「回到地圖」�
   // App 存檔、頁首更新時會重新渲染，每次都傳一個新的 onComplete
   const later = vi.fn();
   rerender(<LessonPlayer lesson={plainLesson} onComplete={later} onExit={onExit} />);
-  rerender(<LessonPlayer lesson={plainLesson} onComplete={(xp) => later(xp)} onExit={onExit} />);
+  rerender(<LessonPlayer lesson={plainLesson} onComplete={(result) => later(result)} onExit={onExit} />);
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
-  expect(screen.getByText('本課獲得 20 XP')).toBeInTheDocument();
+  expect(screen.getByText('本課獲得 25 XP')).toBeInTheDocument();
 
   settle();
   await user.click(button('回到地圖'));
@@ -240,14 +302,15 @@ it('StrictMode 底下（effect 會多跑一次）也只回報一次', async () =
   const { user, fast, onComplete } = renderPlayer(plainLesson, { strict: true });
   await playPlainLesson(user, fast);
   expect(onComplete).toHaveBeenCalledTimes(1);
-  expect(onComplete).toHaveBeenCalledWith(20);
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 25, perfect: true }));
 });
 
 it('一打開就是完成畫面（沒有步驟），StrictMode 底下也只回報一次', () => {
   const { onComplete, onExit } = renderPlayer({ id: 'test-empty', title: '沒有步驟', steps: [] }, { strict: true });
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
   expect(onComplete).toHaveBeenCalledTimes(1);
-  expect(onComplete).toHaveBeenCalledWith(10);
+  // 沒有題目：只有完成一課的 10，不算完美；時間從進入算到完成畫面出現，一打開就完成是 0
+  expect(onComplete).toHaveBeenCalledWith({ xp: 10, perfect: false, accuracy: 100, durationMs: 0 });
   expect(onExit).not.toHaveBeenCalled();
 });
 
@@ -286,9 +349,10 @@ it('沒有輸入就按檢查，會出現提示，而且不算答錯', async () =
   expect(screen.getByText('答對了')).toBeInTheDocument();
   await user.click(button('繼續'));
 
-  expect(screen.getByText('本課獲得 20 XP')).toBeInTheDocument();
+  expect(screen.getByText('本課獲得 25 XP')).toBeInTheDocument();
   await user.click(button('回到地圖'));
-  expect(onComplete).toHaveBeenCalledWith(20); // 10 + 兩題都第一次就答對的 5 + 5
+  // 10 + 兩題都第一次就答對的 5 + 5 + 完美 5
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 25, perfect: true, accuracy: 100 }));
 });
 
 it('看解答後繼續，那一題沒有 XP', async () => {
@@ -316,7 +380,8 @@ it('看解答後繼續，那一題沒有 XP', async () => {
 
   expect(screen.getByText('本課獲得 15 XP')).toBeInTheDocument();
   await user.click(button('回到地圖'));
-  expect(onComplete).toHaveBeenCalledWith(15); // 10 + 選擇題的 5；看解答的數字題沒有
+  // 10 + 選擇題的 5；看解答的數字題沒有
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 15, perfect: false, accuracy: 50 }));
 });
 
 it('數字後面多打了單位：提示「只要填數字，不用寫單位」，不算答錯', async () => {
@@ -341,7 +406,7 @@ it('數字後面多打了單位：提示「只要填數字，不用寫單位」�
   await user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
   await user.click(button('繼續'));
-  expect(screen.getByText('本課獲得 20 XP')).toBeInTheDocument();
+  expect(screen.getByText('本課獲得 25 XP')).toBeInTheDocument();
 });
 
 it('表格題的格子多打了單位，也提示「只要填數字，不用寫單位」', async () => {
@@ -486,7 +551,8 @@ it('表格題標出答錯的格子', async () => {
   await user.click(button('繼續'));
 
   await user.click(button('回到地圖'));
-  expect(onComplete).toHaveBeenCalledWith(10); // 答錯過一次，只有完成一課的 10
+  // 答錯過一次，只有完成一課的 10
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 10, perfect: false, accuracy: 0 }));
 });
 
 it('表格題看解答，空格裡顯示正確的數字', async () => {
@@ -537,18 +603,7 @@ it('引導裡的題目答錯，只會顯示「再試一次」和「看解答」�
 });
 
 it('模擬步驟：顯示說明和模擬，按「繼續」往下', async () => {
-  // 減少動態效果：模擬不跑動畫迴圈
-  Object.defineProperty(window, 'matchMedia', {
-    configurable: true,
-    writable: true,
-    value: (query: string) => ({
-      matches: query.includes('prefers-reduced-motion'),
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
-  });
+  mockReducedMotion(); // 減少動態效果：模擬不跑動畫迴圈
   const { user } = renderPlayer(simLesson);
 
   expect(screen.getByText('動手試試看。')).toBeInTheDocument();
@@ -640,7 +695,7 @@ it('數字題的「±」切換正負號：答案是負數也能輸入', async ()
   expect(screen.getByText('答對了')).toBeInTheDocument();
   await user.click(button('繼續'));
   await user.click(button('回到地圖'));
-  expect(onComplete).toHaveBeenCalledWith(15);
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 20, perfect: true })); // 10 + 5 + 完美 5
 });
 
 it('「±」：空白時先放負號，接著打的數字接在後面；也認得數學負號和全形負號', async () => {
@@ -668,4 +723,245 @@ it('「±」：空白時先放負號，接著打的數字接在後面；也認�
   await user.click(sign);
   await user.click(sign);
   expect(input).toHaveValue('');
+});
+
+// ---- 遊戲感：連續答對、完成成績、音效、動畫 ----
+
+const textbox = (name: string) => screen.getByRole('textbox', { name });
+const progressBar = () => screen.getByRole('progressbar', { name: '課程進度' });
+/** 進度條旁邊的「連續答對 N 題！」。 */
+const COMBO_TEXT = /^連續答對 \d+ 題！$/;
+
+/** 數字題：輸入、檢查、繼續（第一次就答對）。 */
+async function answerNumber(user: User, prompt: string, value: string): Promise<void> {
+  await user.type(textbox(prompt), value);
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+}
+
+it('連續答對 3 題出現「連續答對 3 題！」，答錯後消失', async () => {
+  const { user, onComplete } = renderPlayer(comboLesson);
+
+  await answerNumber(user, '1 + 1 是多少？', '2');
+  await answerNumber(user, '2 + 2 是多少？', '4');
+  expect(screen.queryByText(COMBO_TEXT)).not.toBeInTheDocument();
+  expect(progressBar()).not.toHaveClass('lp-progress--combo');
+
+  await answerNumber(user, '3 + 3 是多少？', '6');
+  const combo = screen.getByText('連續答對 3 題！');
+  expect(combo).toBeVisible();
+  expect(progressBar()).toHaveClass('lp-progress--combo');
+  // 在進度條旁邊（上方固定列裡），而且是即時區域，螢幕閱讀器會念出來
+  expect(progressBar().parentElement).toContainElement(combo);
+  expect(combo.closest('[role="status"]')).not.toBeNull();
+
+  // 觀念卡不算題目，不會打斷連續答對
+  await user.click(button('繼續'));
+  expect(screen.getByText('連續答對 3 題！')).toBeInTheDocument();
+
+  // 答錯：連續答對馬上中斷，提示消失；再試一次答對了也不會回來（這一題已經不是一次答對）
+  await user.type(textbox('4 + 4 是多少？'), '9');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.queryByText(COMBO_TEXT)).not.toBeInTheDocument();
+  expect(progressBar()).not.toHaveClass('lp-progress--combo');
+  await user.click(button('再試一次'));
+  await user.clear(textbox('4 + 4 是多少？'));
+  await user.type(textbox('4 + 4 是多少？'), '8');
+  await user.click(button('檢查'));
+  expect(screen.queryByText(COMBO_TEXT)).not.toBeInTheDocument();
+  await user.click(button('繼續'));
+  expect(screen.queryByText(COMBO_TEXT)).not.toBeInTheDocument();
+  expect(progressBar()).not.toHaveClass('lp-progress--combo');
+
+  await answerNumber(user, '5 + 5 是多少？', '10');
+  expect(screen.queryByText(COMBO_TEXT)).not.toBeInTheDocument();
+
+  // 10 + 4 題一次答對 × 5 + 連續答對加分 1（第 3 題）= 31；5 題裡 4 題一次答對 → 80%
+  expect(screen.getByText('本課獲得 31 XP')).toBeInTheDocument();
+  expect(screen.getByText('正確率 80%')).toBeInTheDocument();
+  expect(screen.queryByText('完美！')).not.toBeInTheDocument();
+  expect(document.querySelector('.lp-confetti')).toBeNull(); // 沒拿到完美，不撒彩紙
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 31, perfect: false, accuracy: 80 }));
+});
+
+it('連續答對 4 題：顯示「連續答對 4 題！」', async () => {
+  const { user } = renderPlayer(comboLesson);
+  await answerNumber(user, '1 + 1 是多少？', '2');
+  await answerNumber(user, '2 + 2 是多少？', '4');
+  await answerNumber(user, '3 + 3 是多少？', '6');
+  await user.click(button('繼續'));
+  await answerNumber(user, '4 + 4 是多少？', '8');
+  expect(screen.getByText('連續答對 4 題！')).toBeInTheDocument();
+  expect(screen.queryByText('連續答對 3 題！')).not.toBeInTheDocument();
+});
+
+it('完成畫面顯示 XP、正確率、時間；全對時顯示「完美！」與額外 XP', async () => {
+  const clock = fakeClock();
+  const { user } = renderPlayer(plainLesson, { now: clock.now });
+
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  await user.type(textbox('3 減 0 是多少？'), '3');
+  await user.click(button('檢查'));
+  clock.time = 83_900; // 從進入第一步起算 1 分 23.9 秒（不足一秒捨去）
+  await user.click(button('繼續'));
+
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(screen.getByText('完美！')).toBeInTheDocument();
+  expect(screen.getByText('本課獲得 25 XP')).toBeInTheDocument(); // 10 + 5 + 5 + 完美 5
+  expect(screen.getByText('正確率 100%')).toBeInTheDocument();
+  expect(screen.getByText('花了 1 分 23 秒')).toBeInTheDocument();
+  const confetti = document.querySelector('.lp-confetti');
+  expect(confetti).not.toBeNull();
+  expect(confetti).toHaveAttribute('aria-hidden', 'true'); // 純裝飾
+});
+
+it('沒拿到完美：沒有「完美！」，也沒有完美加分', async () => {
+  const { user } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await user.click(button('檢查'));
+  await user.click(button('再試一次'));
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  await answerNumber(user, '3 減 0 是多少？', '3');
+
+  expect(screen.getByText('本課獲得 15 XP')).toBeInTheDocument(); // 10 + 數字題 5
+  expect(screen.getByText('正確率 50%')).toBeInTheDocument();
+  expect(screen.queryByText('完美！')).not.toBeInTheDocument();
+  expect(document.querySelector('.lp-confetti')).toBeNull();
+});
+
+it('減少動態效果：完美時照樣顯示「完美！」，但不撒彩紙', async () => {
+  mockReducedMotion();
+  const { user, fast } = renderPlayer(plainLesson);
+  await playPlainLesson(user, fast);
+  expect(screen.getByText('完美！')).toBeInTheDocument();
+  expect(document.querySelector('.lp-confetti')).toBeNull();
+});
+
+it('onComplete 收到 { xp, perfect, accuracy, durationMs } 而且只呼叫一次', async () => {
+  const clock = fakeClock();
+  clock.time = 5_000; // 時鐘不是從 0 開始：時間要從進入第一步起算
+  const { user, onComplete, onExit, rerender } = renderPlayer(plainLesson, { now: clock.now, strict: true });
+
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  await user.type(textbox('3 減 0 是多少？'), '3');
+  await user.click(button('檢查'));
+  clock.time = 50_000;
+  await user.click(button('繼續'));
+
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith({ xp: 25, perfect: true, accuracy: 100, durationMs: 45_000 });
+  expect(screen.getByText('花了 45 秒')).toBeInTheDocument();
+
+  // 之後時間繼續走、完成畫面重新渲染：顯示的時間不變，也不會再回報
+  clock.time = 200_000;
+  rerender(<LessonPlayer lesson={plainLesson} onComplete={onComplete} onExit={onExit} now={clock.now} />);
+  expect(screen.getByText('花了 45 秒')).toBeInTheDocument();
+  await user.click(button('回到地圖'));
+  expect(onComplete).toHaveBeenCalledTimes(1);
+});
+
+it('音效關閉時不呼叫 player.play；開啟時答對呼叫 correct', async () => {
+  // 關閉：整課上完（含答錯、沒輸入就檢查）都不播
+  const off = fakePlayer();
+  const first = renderPlayer(plainLesson, { sound: { enabled: false, player: off } });
+  await playWithOneMistake(first.user);
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(off.play).not.toHaveBeenCalled();
+  first.unmount();
+
+  // 開啟
+  const on = fakePlayer();
+  const { user } = renderPlayer(plainLesson, { sound: { enabled: true, player: on } });
+  await user.click(button('檢查')); // 還沒選：只是提示，不算作答，不播
+  expect(on.play).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  expect(on.kinds()).toEqual(['correct']);
+  await user.click(button('繼續')); // 換下一步不播
+  expect(on.kinds()).toEqual(['correct']);
+
+  await user.type(textbox('3 減 0 是多少？'), '5');
+  await user.click(button('檢查'));
+  expect(on.kinds()).toEqual(['correct', 'wrong']);
+  await user.click(button('再試一次'));
+  await user.clear(textbox('3 減 0 是多少？'));
+  await user.type(textbox('3 減 0 是多少？'), '3');
+  await user.click(button('檢查'));
+  expect(on.kinds()).toEqual(['correct', 'wrong', 'correct']);
+  await user.click(button('繼續'));
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(on.kinds()).toEqual(['correct', 'wrong', 'correct', 'complete']);
+});
+
+/** plainLesson：選擇題一次答對，數字題答錯一次再答對，停在完成畫面。 */
+async function playWithOneMistake(user: User): Promise<void> {
+  await user.click(button('檢查'));
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  await user.type(textbox('3 減 0 是多少？'), '5');
+  await user.click(button('檢查'));
+  await user.click(button('再試一次'));
+  await user.clear(textbox('3 減 0 是多少？'));
+  await user.type(textbox('3 減 0 是多少？'), '3');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+}
+
+it('答對時題目區加上 lp-bounce；答錯不會', async () => {
+  const { user } = renderPlayer(plainLesson);
+  const stage = (text: string) => screen.getByText(text).closest('.lp-stage');
+
+  expect(stage('選出 A')).not.toHaveClass('lp-bounce');
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  expect(stage('選出 A')).toHaveClass('lp-bounce');
+  await user.click(button('繼續'));
+
+  // 下一題重新開始，答錯不彈跳
+  expect(stage('3 減 0 是多少？')).not.toHaveClass('lp-bounce');
+  await user.type(textbox('3 減 0 是多少？'), '5');
+  await user.click(button('檢查'));
+  expect(stage('3 減 0 是多少？')).not.toHaveClass('lp-bounce');
+  await user.click(button('再試一次'));
+  await user.clear(textbox('3 減 0 是多少？'));
+  await user.type(textbox('3 減 0 是多少？'), '3');
+  await user.click(button('檢查'));
+  expect(stage('3 減 0 是多少？')).toHaveClass('lp-bounce');
+});
+
+it('一步一步來裡的題目也有音效；回到原題時不會彈跳', async () => {
+  const player = fakePlayer();
+  const { user } = renderPlayer(guidedLesson, { sound: { enabled: true, player } });
+  await user.click(button('繼續'));
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await user.click(button('檢查'));
+  expect(player.kinds()).toEqual(['wrong']);
+  await user.click(button('一步一步來'));
+
+  await user.type(textbox('2 + 2 是多少？'), '5');
+  await user.click(button('檢查'));
+  expect(player.kinds()).toEqual(['wrong', 'wrong']);
+  await user.click(button('再試一次'));
+  await user.clear(textbox('2 + 2 是多少？'));
+  await user.type(textbox('2 + 2 是多少？'), '4');
+  await user.click(button('檢查'));
+  expect(player.kinds()).toEqual(['wrong', 'wrong', 'correct']);
+  await user.click(button('繼續'));
+
+  // 回到原題：剛出現時不彈跳，答對了才彈
+  const stage = () => screen.getByText('哪一個是對的？').closest('.lp-stage');
+  expect(stage()).not.toHaveClass('lp-bounce');
+  await user.click(screen.getByRole('radio', { name: '選項 C' }));
+  await user.click(button('檢查'));
+  expect(player.kinds()).toEqual(['wrong', 'wrong', 'correct', 'correct']);
+  expect(stage()).toHaveClass('lp-bounce');
 });

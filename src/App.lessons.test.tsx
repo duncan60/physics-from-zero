@@ -4,7 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { stations } from './content/stations';
 import { blankCells } from './lib/answer';
-import { STORAGE_KEY, XP_PER_FIRST_TRY, XP_PER_LESSON } from './lib/progress';
+import { emptyStats, lessonXp, recordQuestion } from './lib/game';
+import { PERFECT_BONUS_XP, STORAGE_KEY, XP_PER_FIRST_TRY, XP_PER_LESSON } from './lib/progress';
 import type { Progress } from './lib/progress';
 import type { Lesson, Step } from './lib/types';
 
@@ -83,6 +84,33 @@ function isQuestion(step: Step): boolean {
   return step.kind === 'choice' || step.kind === 'number' || step.kind === 'table';
 }
 
+/** 第一次就答錯：選擇題選一個錯的選項，數字題和表格題填一個差很遠的數字；按「檢查」→「看解答」→「繼續」。 */
+async function playStepWrong(user: User, step: Step): Promise<void> {
+  switch (step.kind) {
+    case 'choice': {
+      const wrong = step.options.find((option) => option.id !== step.answer);
+      if (wrong === undefined) throw new Error(`${step.id}：沒有錯的選項`);
+      await user.click(screen.getByRole('radio', { name: wrong.label }));
+      break;
+    }
+    case 'number':
+      await user.type(screen.getByRole('textbox', { name: step.prompt }), String(step.answer + 1000));
+      break;
+    case 'table':
+      for (const blank of blankCells(step)) {
+        const name = `${step.rows[blank.row].label}，${step.columns[blank.col]}`;
+        await user.type(screen.getByRole('textbox', { name }), String(blank.answer + 1000));
+      }
+      break;
+    default:
+      throw new Error(`${step.id}：不是題目`);
+  }
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對'), `${step.id}：應該答錯`).toBeInTheDocument();
+  await user.click(button('看解答'));
+  await user.click(button('繼續'));
+}
+
 /** 依課程資料填入正確答案，按「檢查」，看到「答對了」再按「繼續」。觀念卡和模擬直接按「繼續」。 */
 async function playStep(user: User, step: Step): Promise<void> {
   switch (step.kind) {
@@ -111,18 +139,27 @@ async function playStep(user: User, step: Step): Promise<void> {
   await user.click(button('繼續'));
 }
 
-/** 從地圖打開一課，每一步都第一次就答對，停在完成畫面。回傳這一課得到的 XP。 */
-async function playLesson(user: User, lesson: Lesson): Promise<number> {
+/**
+ * 從地圖打開一課，停在完成畫面。預設每一步都第一次就答對（完美）；`missFirst`：第一題故意答錯、看解答。
+ * 回傳這一課得到的 XP（用 lib/game 的規則算：基本 + 一次答對 + 連續答對加分 + 完美加分）。
+ */
+async function playLesson(user: User, lesson: Lesson, options: { missFirst?: boolean } = {}): Promise<number> {
   await user.click(lessonLink(lesson));
   expect(window.location.hash).toBe(`#/lesson/${lesson.id}`);
   expect(screen.getByRole('region', { name: lesson.title })).toBeInTheDocument();
+  let stats = emptyStats();
   for (const [index, step] of lesson.steps.entries()) {
     expect(screen.getByRole('progressbar', { name: '課程進度' }), `${lesson.id} ${step.id}`).toHaveAttribute('aria-valuenow', String(index));
-    await playStep(user, step);
+    const miss = options.missFirst === true && isQuestion(step) && stats.questions === 0;
+    if (miss) await playStepWrong(user, step);
+    else await playStep(user, step);
+    if (isQuestion(step)) stats = recordQuestion(stats, !miss);
   }
-  const gained = XP_PER_LESSON + lesson.steps.filter(isQuestion).length * XP_PER_FIRST_TRY;
+  const gained = lessonXp(stats);
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
   expect(screen.getByText(`本課獲得 ${gained} XP`)).toBeInTheDocument();
+  if (options.missFirst === true) expect(screen.queryByText('完美！')).not.toBeInTheDocument();
+  else expect(screen.getByText('完美！')).toBeInTheDocument();
   return gained;
 }
 
@@ -143,7 +180,7 @@ it('看到完成畫面就已經存檔：沒按「回到地圖」直接按上一�
   expect(screen.queryByRole('heading', { name: '完成這一課' })).not.toBeInTheDocument();
   expect(storedProgress()).toMatchObject({ completed: [first.id], xp: gained, streak: 1 });
   expect(gained).toBeGreaterThan(0);
-  expect(lessonLink(first)).toHaveTextContent('已完成');
+  expect(lessonLink(first)).toHaveTextContent('完美'); // 每一題都第一次就答對
   expect(lessonLink(second)).toHaveTextContent('可以上');
   expect(screen.getByText(`${gained} XP`)).toBeInTheDocument();
 });
@@ -163,13 +200,43 @@ it('依序上完每一課（每一題都第一次就答對）：每一課都會�
 
     await user.click(button('回到地圖'));
     expect(window.location.hash).toBe('#/');
-    expect(lessonLink(lesson)).toHaveTextContent('已完成');
+    expect(lessonLink(lesson)).toHaveTextContent('完美');
     if (next !== undefined) {
       expect(lessonLink(next)).toHaveTextContent('可以上');
       expect(lessonLink(next)).toHaveAttribute('aria-current', 'step');
     }
   }
 
-  expect(storedProgress()).toMatchObject({ completed: lessons.map((l) => l.id), xp: totalXp, streak: 1 });
+  expect(storedProgress()).toMatchObject({ completed: lessons.map((l) => l.id), perfect: lessons.map((l) => l.id), xp: totalXp, streak: 1 });
   expect(screen.queryAllByRole('link', { current: 'step' })).toHaveLength(0); // 全部上完，沒有「目前這一課」
+});
+
+it('App：拿到完美後，地圖上那一課變成「完美」，XP 包含完美加分', async () => {
+  const user = setupUser();
+  render(<App />);
+  const [first] = lessons;
+
+  // 第一次：第一題答錯 → 只是「已完成」，沒有完美加分
+  const missed = await playLesson(user, first, { missFirst: true });
+  expect(storedProgress()).toMatchObject({ completed: [first.id], perfect: [], xp: missed });
+  await user.click(button('回到地圖'));
+  expect(lessonLink(first)).toHaveTextContent('已完成');
+  expect(lessonLink(first)).not.toHaveTextContent('完美');
+
+  // 重上一次，全部第一次就答對 → 完美，XP 多了完美加分
+  const perfect = await playLesson(user, first);
+  // 基本 + 每題一次答對 + 完美加分（題目夠多時還有連續答對加分）
+  const questions = first.steps.filter(isQuestion).length;
+  expect(perfect).toBeGreaterThanOrEqual(XP_PER_LESSON + questions * XP_PER_FIRST_TRY + PERFECT_BONUS_XP);
+  expect(storedProgress()).toMatchObject({ completed: [first.id], perfect: [first.id], xp: missed + perfect });
+  expect(screen.getByText(`${missed + perfect} XP`)).toBeInTheDocument();
+  await user.click(button('回到地圖'));
+  expect(lessonLink(first)).toHaveTextContent('完美');
+  expect(lessonLink(first)).not.toHaveTextContent('已完成');
+
+  // 再上一次又答錯：已經是完美的課不會變回來
+  await playLesson(user, first, { missFirst: true });
+  await user.click(button('回到地圖'));
+  expect(storedProgress()).toMatchObject({ perfect: [first.id] });
+  expect(lessonLink(first)).toHaveTextContent('完美');
 });

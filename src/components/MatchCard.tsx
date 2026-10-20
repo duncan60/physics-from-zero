@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { isPair, shuffle } from '../lib/match';
-import type { MatchStep } from '../lib/types';
+import type { CheckOutcome, MatchStep } from '../lib/types';
 import { useActionGuard } from './useActionGuard';
 
 /** 配錯時兩塊標示錯誤的時間，之後恢復成沒選的樣子。 */
@@ -19,12 +19,13 @@ const ITEM_STYLE = { minHeight: 56 };
  * 配對題：左右兩欄按鈕，右欄打亂順序（`random` 可以注入，測試才能控制；預設 Math.random）。
  * 先點一邊、再點另一邊：是一對 → 兩塊鎖定（aria-disabled、打勾）；不是 → 兩塊標示錯誤約 WRONG_FLASH_MS 後恢復，
  * 這一題就不算一次答對。全部配完 →「答對了」＋說明＋「繼續」。沒有「檢查」、引導和看解答（配對本身就是逐一嘗試）。
- * `onFinish(cleanFirstTry)`：沒有配錯過才是 true。`onCheck()`：每配一次（不論對錯）就呼叫。
+ * `onFinish(cleanFirstTry)`：沒有配錯過才是 true。
+ * `onCheck(outcome)`：每配一次就呼叫：不是一對是 'wrong'，配對了一對但還沒配完是 'partial'，配完最後一對是 'correct'。
  */
 export function MatchCard(props: {
   step: MatchStep;
   onFinish: (cleanFirstTry: boolean) => void;
-  onCheck?: () => void;
+  onCheck?: (outcome: CheckOutcome) => void;
   random?: () => number;
 }): React.JSX.Element {
   const { step, onFinish, onCheck, random = Math.random } = props;
@@ -69,13 +70,15 @@ export function MatchCard(props: {
     const leftText = step.pairs[left].left;
     const rightText = rights[right];
     setSelected(null);
-    onCheck?.();
     if (isPair(step, leftText, rightText)) {
+      const remaining = matchedLeft.filter((matched) => !matched).length;
+      onCheck?.(remaining === 1 ? 'correct' : 'partial');
       setMatchedLeft((m) => m.map((v, i) => v || i === left));
       setMatchedRight((m) => m.map((v, i) => v || i === right));
       setAnnouncement(`${leftText}、${rightText}：配對成功`);
       return;
     }
+    onCheck?.('wrong');
     setHadWrong(true);
     setWrong({ left, right });
     setAnnouncement(`${leftText}、${rightText}：不是一對`);

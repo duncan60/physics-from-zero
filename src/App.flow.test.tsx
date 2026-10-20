@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-import { STORAGE_KEY, completeLesson, loadProgress, localDayKey } from './lib/progress';
+import { STORAGE_KEY, completeLesson, loadProgress, localDayKey, setSoundOn } from './lib/progress';
 import type { Progress } from './lib/progress';
 
 // App 怎麼接 LessonPlayer 的 onComplete／onExit：換成一個假的上課畫面，不用真的把一課上完。
@@ -12,7 +12,7 @@ vi.mock('./components/LessonPlayer', async () => {
   const { useState } = await import('react');
   function FakeLessonPlayer(props: {
     lesson: { id: string; title: string };
-    onComplete: (xp: number) => void;
+    onComplete: (result: { xp: number; perfect: boolean; accuracy: number; durationMs: number }) => void;
     onExit: () => void;
   }): React.JSX.Element {
     const [done, setDone] = useState(false);
@@ -32,10 +32,19 @@ vi.mock('./components/LessonPlayer', async () => {
           type="button"
           onClick={() => {
             setDone(true);
-            props.onComplete(15);
+            props.onComplete({ xp: 15, perfect: false, accuracy: 50, durationMs: 60_000 });
           }}
         >
           假裝上完
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDone(true);
+            props.onComplete({ xp: 30, perfect: true, accuracy: 100, durationMs: 60_000 });
+          }}
+        >
+          假裝完美
         </button>
         <button type="button" onClick={props.onExit}>
           假裝離開
@@ -181,6 +190,100 @@ it('存不進去（例如空間滿了）時，這次的進度仍然顯示在畫�
   expect(window.location.hash).toBe('#/');
   expect(screen.getByText('15 XP')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /速度與位置/ })).toHaveTextContent('可以上');
+});
+
+/** 模擬另一個分頁切換音效：讀出儲存空間的進度、改音效、存回去，並發出 storage 事件。 */
+function otherTabSetsSound(on: boolean): void {
+  const oldValue = window.localStorage.getItem(STORAGE_KEY);
+  const newValue = JSON.stringify(setSoundOn(loadProgress(window.localStorage), on));
+  window.localStorage.setItem(STORAGE_KEY, newValue);
+  act(() => {
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, oldValue, newValue, storageArea: window.localStorage }));
+  });
+}
+
+it('拿到完美：存進 perfect，XP 照算，地圖上那一課顯示「完美」', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('link', { name: /慣性/ }));
+  await user.click(screen.getByRole('button', { name: '假裝完美' }));
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1'], perfect: ['1-1'], xp: 30, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
+  expect(screen.getByText('30 XP')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('完美');
+
+  // 再上一次沒拿到完美：仍然是金色的「完美」
+  await user.click(screen.getByRole('link', { name: /慣性/ }));
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(storedProgress()).toMatchObject({ completed: ['1-1'], perfect: ['1-1'], xp: 45 });
+  expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('完美');
+});
+
+it('音效開關：按了切換 aria-pressed，並寫進進度；重新載入仍是關閉', async () => {
+  const user = userEvent.setup();
+  const { unmount } = render(<App />);
+  const on = screen.getByRole('button', { name: '音效：開' });
+  expect(on).toHaveAttribute('aria-pressed', 'true'); // 預設開啟
+
+  await user.click(on);
+  const off = screen.getByRole('button', { name: '音效：關' });
+  expect(off).toHaveAttribute('aria-pressed', 'false');
+  expect(off).toHaveFocus(); // 還是同一顆按鈕，焦點留在原處
+  expect(storedProgress()).toMatchObject({ soundOn: false });
+
+  // 重新載入
+  unmount();
+  render(<App />);
+  expect(screen.getByRole('button', { name: '音效：關' })).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByRole('button', { name: '音效：開' })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '音效：關' }));
+  expect(screen.getByRole('button', { name: '音效：開' })).toHaveAttribute('aria-pressed', 'true');
+  expect(storedProgress()).toMatchObject({ soundOn: true });
+});
+
+it('音效開關：沒收到 storage 事件的舊分頁切換音效，不會蓋掉另一個分頁存的進度', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  otherTabCompletes('1-1', 15, { notify: false });
+
+  await user.click(screen.getByRole('button', { name: '音效：開' }));
+  expect(storedProgress()).toEqual({ version: 2, completed: ['1-1'], perfect: [], xp: 15, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: false });
+  expect(screen.getByText('15 XP')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('已完成');
+});
+
+it('另一個分頁切換音效（收到 storage 事件）：這個分頁跟著改', () => {
+  render(<App />);
+  otherTabSetsSound(false);
+  expect(screen.getByRole('button', { name: '音效：關' })).toHaveAttribute('aria-pressed', 'false');
+  otherTabSetsSound(true);
+  expect(screen.getByRole('button', { name: '音效：開' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+it('另一個分頁上完一課時，用的是那個分頁選的音效設定', () => {
+  render(<App />);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(setSoundOn(loadProgress(window.localStorage), false)));
+  otherTabCompletes('1-1', 15, { notify: true });
+  expect(screen.getByRole('button', { name: '音效：關' })).toBeInTheDocument();
+  expect(screen.getByText('15 XP')).toBeInTheDocument();
+});
+
+it('儲存空間不能用時，音效開關照樣切換（只是記不住）', async () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new DOMException('denied', 'SecurityError');
+  });
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('denied', 'SecurityError');
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('button', { name: '音效：開' }));
+  expect(screen.getByRole('button', { name: '音效：關' })).toHaveAttribute('aria-pressed', 'false');
+  await user.click(screen.getByRole('button', { name: '音效：關' }));
+  expect(screen.getByRole('button', { name: '音效：開' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 it('另一個分頁上完一課（收到 storage 事件）：這個分頁的頁首和地圖跟著更新', () => {

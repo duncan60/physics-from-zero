@@ -1,10 +1,12 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { SoundKind } from '../lib/sound';
 import type { FormulaStep, Lesson, MatchStep, QuestionStep, SliderStep } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
 import { MatchCard } from './MatchCard';
 import { QuestionCard } from './QuestionCard';
+import { SoundProvider } from './SoundContext';
 
 // 測試專用的題目，不依賴真實課程內容。
 
@@ -573,7 +575,8 @@ it('LessonPlayer：一課裡混合 formula、slider、match 能一路走到完�
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
   expect(screen.getByText('本課獲得 20 XP')).toBeInTheDocument();
   expect(onComplete).toHaveBeenCalledTimes(1);
-  expect(onComplete).toHaveBeenCalledWith(20); // 10 + 滑桿 5 + 配對 5；拼算式用了引導，沒有
+  // 10 + 滑桿 5 + 配對 5；拼算式用了引導，沒有。三題兩題一次答對：67%，不是完美
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 20, perfect: false, accuracy: 67 }));
   expect(onExit).not.toHaveBeenCalled();
 });
 
@@ -586,4 +589,75 @@ it('LessonPlayer：配對配過一次之後按「離開」，要先確認', asyn
   await user.click(button('離開'));
   expect(screen.getByRole('alertdialog', { name: '要離開這一課嗎？' })).toBeInTheDocument();
   expect(onExit).not.toHaveBeenCalled();
+});
+
+it('拼算式：onCheck 告訴外面這次檢查的結果（算式拼對是 partial，答案對了才是 correct）', async () => {
+  const onCheck = vi.fn();
+  const user = setupUser();
+  render(<QuestionCard step={formulaStep} onFinish={vi.fn()} onCheck={onCheck} />);
+
+  await user.click(button('檢查')); // 什麼都沒放：只是提示，不算一次檢查
+  expect(onCheck).not.toHaveBeenCalled();
+  const input = await solveFormula(user);
+  expect(onCheck.mock.calls).toEqual([['partial']]);
+  await user.type(input, '400');
+  await user.click(button('檢查'));
+  expect(onCheck.mock.calls).toEqual([['partial'], ['wrong']]);
+  await user.click(button('再試一次'));
+  await user.clear(input);
+  await user.type(input, '1');
+  await user.click(button('檢查'));
+  expect(onCheck.mock.calls).toEqual([['partial'], ['wrong'], ['correct']]);
+});
+
+it('配對：onCheck 每配一次就告訴外面結果，最後一對才是 correct', async () => {
+  const onCheck = vi.fn();
+  const user = setupUser();
+  render(<MatchCard step={matchStep} onFinish={vi.fn()} onCheck={onCheck} random={() => 0} />);
+
+  await user.click(button('加速度'));
+  await user.click(button('平均速度 × 時間'));
+  expect(onCheck.mock.calls).toEqual([['wrong']]);
+  act(() => {
+    vi.advanceTimersByTime(600);
+  });
+  for (const pair of matchStep.pairs) {
+    await user.click(button(pair.left));
+    await user.click(button(pair.right));
+  }
+  expect(onCheck.mock.calls).toEqual([['wrong'], ['partial'], ['partial'], ['correct']]);
+});
+
+it('LessonPlayer：配對每配一次播一次音效，全部配完題目區彈跳，完成時播 complete', async () => {
+  const play = vi.fn<(kind: SoundKind) => void>();
+  const user = setupUser();
+  render(
+    <SoundProvider enabled player={{ play }}>
+      <LessonPlayer lesson={{ id: 'test-match-sound', title: '測試配對音效', steps: [matchStep] }} onComplete={vi.fn()} onExit={vi.fn()} />
+    </SoundProvider>,
+  );
+  const stage = () => screen.getByText(matchStep.prompt).closest('.lp-stage');
+  const kinds = () => play.mock.calls.map(([kind]) => kind);
+
+  await user.click(button('加速度'));
+  await user.click(button('平均速度 × 時間'));
+  expect(kinds()).toEqual(['wrong']);
+  act(() => {
+    vi.advanceTimersByTime(600);
+  });
+  await user.click(button(matchStep.pairs[0].left));
+  await user.click(button(matchStep.pairs[0].right));
+  expect(kinds()).toEqual(['wrong', 'correct']);
+  expect(stage()).not.toHaveClass('lp-bounce'); // 還沒配完
+  for (const pair of matchStep.pairs.slice(1)) {
+    await user.click(button(pair.left));
+    await user.click(button(pair.right));
+  }
+  expect(kinds()).toEqual(['wrong', 'correct', 'correct', 'correct']);
+  expect(stage()).toHaveClass('lp-bounce');
+
+  await user.click(button('繼續'));
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(kinds()).toEqual(['wrong', 'correct', 'correct', 'correct', 'complete']);
+  expect(screen.getByText('正確率 0%')).toBeInTheDocument(); // 配錯過一次，這一題不算一次答對
 });

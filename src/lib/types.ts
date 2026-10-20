@@ -18,3 +18,9 @@ export type GuideStep = ConceptStep | ChoiceStep | NumberStep | TableStep; // �
 export type Step = ConceptStep | QuestionStep | SimStep | MatchStep;
 export interface Lesson { id: string; title: string; steps: Step[] }
 export interface Station { id: number; title: string; lessons: Lesson[] } // lessons 為空代表「即將推出」
+
+/**
+ * 按一次「檢查」（或配一對）的結果：
+ * correct：這一題答對了；partial：對了一部分，題目還沒結束（拼算式拼對了算式、配對配對了一對但還沒配完）；wrong：答錯了。
+ */
+export type CheckOutcome = 'correct' | 'partial' | 'wrong';

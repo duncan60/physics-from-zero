@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { GuideStep } from '../lib/types';
+import type { CheckOutcome, GuideStep } from '../lib/types';
 import { QuestionCard } from './QuestionCard';
 import { ConceptView } from './steps/ConceptView';
 
@@ -11,9 +11,10 @@ function focusOnMount(element: HTMLElement | null): void {
 /**
  * 依序跑完引導步驟，最後呼叫 `onDone()`。
  * 引導裡的題目不會再有引導（內容測試保證），這裡也不傳 `onRequestGuide`，答錯只會有「再試一次」和「看解答」。
+ * `onCheck(outcome)`：引導裡的題目每次「檢查」的結果（LessonPlayer 用來播音效）。
  */
-export function GuideRunner(props: { steps: GuideStep[]; onDone: () => void }): React.JSX.Element {
-  const { steps, onDone } = props;
+export function GuideRunner(props: { steps: GuideStep[]; onDone: () => void; onCheck?: (outcome: CheckOutcome) => void }): React.JSX.Element {
+  const { steps, onDone, onCheck } = props;
   const [index, setIndex] = useState(0);
   const step = steps[index] as GuideStep | undefined;
 
@@ -31,7 +32,7 @@ export function GuideRunner(props: { steps: GuideStep[]; onDone: () => void }): 
     <section className="lp-guide" aria-label="一步一步來">
       {step !== undefined && (
         <div key={index} ref={focusOnMount} tabIndex={-1} className="lp-guide-step">
-          {step.kind === 'concept' ? <ConceptView step={step} onContinue={next} /> : <QuestionCard step={step} onFinish={next} />}
+          {step.kind === 'concept' ? <ConceptView step={step} onContinue={next} /> : <QuestionCard step={step} onFinish={next} onCheck={onCheck} />}
         </div>
       )}
     </section>

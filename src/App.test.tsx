@@ -203,6 +203,32 @@ it('頁首顯示存起來的 XP 和連續天數；地圖標出已完成、目前
   expect(lessonItem('加速度')).toHaveTextContent('鎖住');
 });
 
+it('地圖：perfect 裡的課顯示「完美」；舊的「已完成」照常顯示', () => {
+  // 1-4 在 perfect 裡、卻沒有完成（存檔被改過）：不算完美，也不會因此解鎖
+  seedProgress({ ...emptyProgress(), completed: ['1-1', '1-2'], perfect: ['1-1', '1-4'], xp: 60, streak: 1, lastActiveDay: localDayKey(new Date()) });
+  render(<App />);
+
+  const gold = screen.getByRole('link', { name: /慣性/ });
+  expect(gold).toHaveTextContent('完美');
+  expect(gold).not.toHaveTextContent('已完成');
+  expect(gold).toHaveClass('path-node--perfect');
+  expect(gold).not.toHaveAttribute('aria-current');
+
+  const done = screen.getByRole('link', { name: /速度與位置/ });
+  expect(done).toHaveTextContent('已完成');
+  expect(done).not.toHaveTextContent('完美');
+  expect(done).toHaveClass('path-node--completed');
+
+  // 不只顏色不同：完美和已完成的圖示也不一樣
+  const icon = (link: HTMLElement) => link.querySelector('.path-node-circle svg')?.innerHTML;
+  expect(icon(gold)).not.toBe(icon(done));
+
+  expect(screen.getByRole('link', { name: /加速度/ })).toHaveAttribute('aria-current', 'step');
+  expect(lessonItem('往上丟的球')).toHaveTextContent('鎖住');
+  expect(lessonItem('往上丟的球')).not.toHaveTextContent('完美');
+  expect(screen.getAllByText('完美')).toHaveLength(1);
+});
+
 it('進度不連續時（例如以後課程順序改了），上過的課一定打得開', () => {
   // 只完成了 1-2：1-1 還沒上（目前這一課），1-3 因為 1-2 完成而解鎖，1-4 鎖住。
   seedProgress({ ...emptyProgress(), completed: ['1-2'], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()) });

@@ -36,6 +36,26 @@
   --path-line: #c9d5cc; /* 還沒走過的路線（點點） */
   --path-done: #9fd3b0; /* 已經走過的路線 */
 
+  /* 完美（金色）：地圖上的課、完成畫面的「完美！」 */
+  --gold: #d29b0c; /* 圓圈外框、徽章 */
+  --gold-strong: #9a6a05; /* 立體陰影 */
+  --gold-soft: #fdf3d0; /* 圓圈底色 */
+  --gold-text: #7c5203; /* 淺金底上的星星（對比 6.2） */
+  --gold-chip: #f7c948; /* 「完美」標籤的底色 */
+  --on-gold: #3d2800; /* 標籤上的字（對比 8.9） */
+  --sheen: rgb(255 255 255 / 0.65); /* 金色圓圈上滑過的光澤 */
+
+  /* 連續答對：進度條旁的標籤 */
+  --combo-soft: #ffedd5;
+  --combo-text: #a14a00; /* 對比 5.4 */
+
+  /* 彩紙的五種顏色 */
+  --confetti-1: #f2b705;
+  --confetti-2: #16a34a;
+  --confetti-3: #f97316;
+  --confetti-4: #3b82f6;
+  --confetti-5: #e5508f;
+
   --sim-primary: var(--primary);
   --sim-danger: #c62828;
   --sim-ball: #ea580c;
@@ -48,6 +68,11 @@
   --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --icon-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7l10 10M17 7L7 17' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   --icon-badge: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cpath fill-rule='evenodd' d='M48 0a48 48 0 1 0 0 96a48 48 0 1 0 0-96Z M25 50 L32 43 L42 53 L65 30 L72 37 L42 67 Z'/%3E%3C/svg%3E");
+  /* 完美的徽章：圓形裡挖出一顆星星 */
+  --icon-star-badge: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cpath fill-rule='evenodd' d='M48 0a48 48 0 1 0 0 96a48 48 0 1 0 0-96Z M48 22 L55.05 40.29 L74.63 41.35 L59.41 53.71 L64.46 72.65 L48 62 L31.54 72.65 L36.59 53.71 L21.37 41.35 L40.95 40.29 Z'/%3E%3C/svg%3E");
+  --icon-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5l2.35 5.76 6.21.46-4.76 4.02 1.49 6.04L12 16.5l-5.29 3.28 1.49-6.04-4.76-4.02 6.21-.46z' stroke='black' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-flame: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5c.6 3-1.1 4.6-2.6 6.2C7.9 10.3 6.5 12 6.5 14.6A5.5 5.5 0 0 0 12 20.5a5.5 5.5 0 0 0 5.5-5.9c-.2-2.3-1.3-3.6-2.3-4.6-.1 1.4-.7 2.4-1.7 2.9.6-3.6-.3-7.7-1.5-10.4z'/%3E%3C/svg%3E");
+  --icon-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-width='2.4'/%3E%3Cpath d='M12 7v5.5l3.5 2' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   font-family: system-ui, -apple-system, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   font-size: 100%;
@@ -89,6 +114,17 @@
     --xp: #facc15;
     --path-line: #3a5244;
     --path-done: #2c6e45;
+
+    --gold: #f5c542;
+    --gold-strong: #8a5d00;
+    --gold-soft: #3b2f0e;
+    --gold-text: #ffd966;
+    --gold-chip: #f5c542;
+    --on-gold: #2a1c00;
+    --sheen: rgb(255 255 255 / 0.3);
+
+    --combo-soft: #3d2410;
+    --combo-text: #ffb366;
 
     --sim-danger: #c62828;
     --sim-ball: #fb923c;
@@ -244,10 +280,17 @@ button {
   flex: none;
 }
 
+.site-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
 .stats {
   display: flex;
   gap: 6px;
-  margin: 0 0 0 auto;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -280,6 +323,46 @@ button {
   color: var(--xp);
 }
 
+/* 音效開關：圖示 + 文字；關掉時喇叭上是叉（不只顏色不同）。 */
+.sound-toggle {
+  appearance: none;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px 0 9px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background-color: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sound-toggle svg {
+  flex: none;
+  color: var(--primary-text);
+}
+
+.sound-toggle--off,
+.sound-toggle--off svg {
+  color: var(--text-muted);
+}
+
+@media (hover: hover) {
+  .sound-toggle:hover {
+    background-color: var(--surface-2);
+  }
+}
+
 /* 窄螢幕：拿掉標誌、字小一點，網站名稱和連續天數、XP 才排得進同一行（排不下時 XP 那組會換到下一行靠右）。 */
 @media (max-width: 400px) {
   .site-logo {
@@ -293,6 +376,21 @@ button {
   .stat {
     padding-inline: 5px 8px;
     font-size: 0.875rem;
+  }
+
+  /* 只留喇叭圖示，「音效：開／關」留給螢幕閱讀器 */
+  .sound-toggle {
+    padding: 0;
+  }
+
+  .sound-toggle-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -556,6 +654,47 @@ button {
   color: var(--text-muted);
 }
 
+/* 完美：金色圓圈、星星、金色的「完美」標籤；圓圈上不時滑過一道光澤 */
+.path-node--perfect .path-node-circle {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--gold);
+  background-color: var(--gold-soft);
+  color: var(--gold-text);
+  box-shadow: 0 4px 0 var(--gold-strong);
+}
+
+.path-node--perfect .path-node-circle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(115deg, transparent 30%, var(--sheen) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.path-node--perfect .path-node-status {
+  border-color: var(--gold-strong);
+  background-color: var(--gold-chip);
+  color: var(--on-gold);
+}
+
+@keyframes path-sheen {
+  0%,
+  65% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .path-node--perfect .path-node-circle::after {
+    animation: path-sheen 4s ease-in-out infinite;
+  }
+}
+
 @media (hover: hover) {
   a.path-node:hover .path-node-circle {
     transform: translateY(-2px);
@@ -676,6 +815,99 @@ a.path-node:active .path-node-circle {
   border-radius: inherit;
   background-color: var(--primary);
   transition: width 350ms ease-out;
+}
+
+/* 進度條和「連續答對 N 題！」在同一列；高度固定，提示出現時上方固定列不會跳動。 */
+.lp-progress-row {
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+}
+
+.lp-progress-row > .lp-progress {
+  flex: 1;
+  min-width: 48px;
+}
+
+/* 即時區域：空的時候不佔空間（不可以 display: none） */
+.lp-combo {
+  display: flex; /* 不用段落的行高，列的高度只由標籤決定 */
+  flex: none;
+  margin: 0;
+}
+
+.lp-combo-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding: 1px 8px 1px 5px;
+  border-radius: 999px;
+  background-color: var(--combo-soft);
+  color: var(--combo-text);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.lp-combo-text::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  -webkit-mask: var(--icon-flame) center / contain no-repeat;
+  mask: var(--icon-flame) center / contain no-repeat;
+  background-color: var(--streak);
+}
+
+/* 連續答對時進度條變成橘到金的漸層 */
+.lp-progress--combo {
+  box-shadow: inset 0 0 0 1px var(--streak);
+}
+
+.lp-progress--combo .lp-progress-fill {
+  background-color: var(--streak);
+  background-image: linear-gradient(90deg, var(--streak), var(--gold));
+}
+
+@keyframes lp-combo-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-combo-text {
+    animation: lp-combo-pop 320ms ease-out;
+  }
+}
+
+/* 答對：題目區往上彈一下（只上下移動，不放大，窄螢幕不會出現水平捲軸） */
+@keyframes lp-bounce {
+  0%,
+  55%,
+  100% {
+    transform: translateY(0);
+  }
+  28% {
+    transform: translateY(-7px);
+  }
+  78% {
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-bounce {
+    animation: lp-bounce 460ms ease-out;
+  }
 }
 
 .lp-actions {
@@ -1587,13 +1819,87 @@ a.path-node:active .path-node-circle {
 
 .lp-complete-xp {
   display: inline-block;
-  margin: 14px 0 8px;
+  margin: 14px 0 6px;
   padding: 8px 20px;
   border-radius: 999px;
   background-color: var(--primary-soft);
   color: var(--primary-text);
   font-size: 1.25rem;
   font-weight: 800;
+}
+
+.lp-complete-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-complete-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 8px 11px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lp-complete-stat::before {
+  content: '';
+  flex: none;
+  width: 20px;
+  height: 20px;
+  -webkit-mask: var(--icon-check) center / contain no-repeat;
+  mask: var(--icon-check) center / contain no-repeat;
+  background-color: var(--correct);
+}
+
+.lp-complete-stat--time::before {
+  -webkit-mask-image: var(--icon-clock);
+  mask-image: var(--icon-clock);
+  background-color: var(--info);
+}
+
+/* 完美：徽章換成金色的星星，標題下多一個「完美！」 */
+.lp-complete--perfect::before {
+  -webkit-mask-image: var(--icon-star-badge);
+  mask-image: var(--icon-star-badge);
+  background-color: var(--gold);
+}
+
+.lp-perfect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 12px auto 0;
+  padding: 4px 16px;
+  border: 2px solid var(--gold-strong);
+  border-radius: 999px;
+  background-color: var(--gold-chip);
+  color: var(--on-gold);
+  font-size: 1.375rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow: 0 3px 0 var(--gold-strong);
+}
+
+.lp-perfect::before,
+.lp-perfect::after {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 18px;
+  -webkit-mask: var(--icon-star) center / contain no-repeat;
+  mask: var(--icon-star) center / contain no-repeat;
+  background-color: currentColor;
 }
 
 .lp-complete .lp-actions {
@@ -1618,6 +1924,73 @@ a.path-node:active .path-node-circle {
 @media (prefers-reduced-motion: no-preference) {
   .lp-complete::before {
     animation: pop-in 360ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  }
+
+  .lp-perfect {
+    animation: pop-in 420ms 180ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  }
+}
+
+/* ---- 彩紙（完美時，components/Confetti.tsx） ---- */
+
+/* 蓋住整個畫面、點得穿；超出畫面的彩紙被裁掉，不會出現捲軸。 */
+.lp-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lp-confetti-piece {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: var(--confetti-color, var(--confetti-1));
+  opacity: 0;
+}
+
+.lp-confetti-piece:nth-child(5n + 2) {
+  --confetti-color: var(--confetti-2);
+}
+
+.lp-confetti-piece:nth-child(5n + 3) {
+  --confetti-color: var(--confetti-3);
+}
+
+.lp-confetti-piece:nth-child(5n + 4) {
+  --confetti-color: var(--confetti-4);
+}
+
+.lp-confetti-piece:nth-child(5n) {
+  --confetti-color: var(--confetti-5);
+}
+
+.lp-confetti-piece:nth-child(3n) {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+@keyframes lp-confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--confetti-drift), 100vh, 0) rotate(var(--confetti-spin));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-confetti-piece {
+    animation: lp-confetti-fall var(--confetti-duration) cubic-bezier(0.25, 0.6, 0.45, 1) var(--confetti-delay) both;
   }
 }
 

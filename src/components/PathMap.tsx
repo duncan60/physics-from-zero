@@ -6,10 +6,11 @@ import type { Progress } from '../lib/progress';
 import type { Lesson, Station } from '../lib/types';
 import { routeToHash } from '../lib/router';
 
-// 已完成；可以上（目前這一課是 current，其他還沒上、但已解鎖的是 available）；鎖住。
-type LessonState = 'completed' | 'current' | 'available' | 'locked';
+// 完美（完成，而且拿過完美：金色、星星）；已完成；可以上（目前這一課是 current，其他還沒上、但已解鎖的是 available）；鎖住。
+type LessonState = 'perfect' | 'completed' | 'current' | 'available' | 'locked';
 
 const STATUS_TEXT: Record<LessonState, string> = {
+  perfect: '完美',
   completed: '已完成',
   current: '可以上',
   available: '可以上',
@@ -29,7 +30,8 @@ function lessonStates(progress: Progress): Map<string, LessonState> {
   let currentFound = false;
   for (const id of orderedLessonIds) {
     if (progress.completed.includes(id)) {
-      states.set(id, 'completed');
+      // 完美清單只增不減；只有真的完成了的課才算（存檔被改過、清單裡有沒完成的課，也不會因此變金色）。
+      states.set(id, progress.perfect.includes(id) ? 'perfect' : 'completed');
     } else if (canOpenLesson(progress, id)) {
       // 依上課順序，第一個還沒上完、可以上的課，就是目前這一課。
       states.set(id, currentFound ? 'available' : 'current');
@@ -71,6 +73,20 @@ function CheckIcon(): React.JSX.Element {
   );
 }
 
+function StarIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false">
+      <path
+        d="M12 3.5l2.35 5.76 6.21.46-4.76 4.02 1.49 6.04L12 16.5l-5.29 3.28 1.49-6.04-4.76-4.02 6.21-.46z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function PlayIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
@@ -91,6 +107,8 @@ function LockIcon(props: { size?: number }): React.JSX.Element {
 
 function StateIcon(props: { state: LessonState }): React.JSX.Element {
   switch (props.state) {
+    case 'perfect':
+      return <StarIcon />;
     case 'completed':
       return <CheckIcon />;
     case 'current':
@@ -138,6 +156,11 @@ function LessonNode(props: { lesson: Lesson; state: LessonState; onOpen: (lesson
   );
 }
 
+/** 上完了（不論有沒有拿到完美）：這一課之後的路線畫成走過的樣子。 */
+function isDone(state: LessonState | undefined): boolean {
+  return state === 'completed' || state === 'perfect';
+}
+
 function StationPath(props: { station: Station; states: Map<string, LessonState>; onOpen: (lessonId: string) => void }): React.JSX.Element {
   const { station, states, onOpen } = props;
   const height = station.lessons.length * ROW_HEIGHT;
@@ -148,7 +171,7 @@ function StationPath(props: { station: Station; states: Map<string, LessonState>
           <path
             key={lesson.id}
             d={segmentPath(i)}
-            className={states.get(lesson.id) === 'completed' ? 'path-segment path-segment--done' : 'path-segment'}
+            className={isDone(states.get(lesson.id)) ? 'path-segment path-segment--done' : 'path-segment'}
           />
         ))}
       </svg>
