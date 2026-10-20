@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
@@ -80,8 +80,20 @@ function lessonItem(lesson: Lesson): HTMLElement {
   return item;
 }
 
+// 題目（含配對）才算進一次答對、連續答對和完美；觀念卡和模擬不算。新增一種步驟時，這裡少了 case 就會編譯失敗。
 function isQuestion(step: Step): boolean {
-  return step.kind === 'choice' || step.kind === 'number' || step.kind === 'table';
+  switch (step.kind) {
+    case 'choice':
+    case 'number':
+    case 'table':
+    case 'formula':
+    case 'slider':
+    case 'match':
+      return true;
+    case 'concept':
+    case 'sim':
+      return false;
+  }
 }
 
 /** 第一次就答錯：選擇題選一個錯的選項，數字題和表格題填一個差很遠的數字；按「檢查」→「看解答」→「繼續」。 */
@@ -111,11 +123,23 @@ async function playStepWrong(user: User, step: Step): Promise<void> {
   await user.click(button('繼續'));
 }
 
-/** 依課程資料填入正確答案，按「檢查」，看到「答對了」再按「繼續」。觀念卡和模擬直接按「繼續」。 */
+/**
+ * 依課程資料填入正確答案，按「檢查」，看到「答對了」再按「繼續」。觀念卡和模擬直接按「繼續」。
+ * 拼算式：依序點第一個可接受寫法的磚塊（一樣的磚塊點下方還沒用到的第一塊），檢查後在第 2 步填答案；
+ * 拉滑桿：拉到正確值（用 change 模擬拖拉）；配對：每個左邊點完再點它的右邊，配完直接出現「答對了」，沒有「檢查」。
+ */
 async function playStep(user: User, step: Step): Promise<void> {
   switch (step.kind) {
     case 'concept':
     case 'sim':
+      await user.click(button('繼續'));
+      return;
+    case 'match':
+      for (const pair of step.pairs) {
+        await user.click(button(pair.left));
+        await user.click(button(pair.right));
+      }
+      expect(screen.getByText('答對了'), `${step.id}：沒有配完`).toBeInTheDocument();
       await user.click(button('繼續'));
       return;
     case 'choice': {
@@ -132,6 +156,17 @@ async function playStep(user: User, step: Step): Promise<void> {
         const name = `${step.rows[blank.row].label}，${step.columns[blank.col]}`;
         await user.type(screen.getByRole('textbox', { name }), String(blank.answer));
       }
+      break;
+    case 'formula': {
+      const bank = screen.getByRole('group', { name: '磚塊' });
+      for (const token of step.accepted[0]) await user.click(within(bank).getAllByRole('button', { name: `放入 ${token}` })[0]);
+      await user.click(button('檢查'));
+      expect(screen.queryByText('還不對'), `${step.id}：算式沒有拼對`).not.toBeInTheDocument();
+      await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), String(step.answer));
+      break;
+    }
+    case 'slider':
+      fireEvent.change(screen.getByRole('slider', { name: step.quantity }), { target: { value: String(step.answer) } });
       break;
   }
   await user.click(button('檢查'));
