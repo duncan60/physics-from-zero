@@ -42,7 +42,8 @@ export function checkChoice(step: ChoiceStep, optionId: string): CheckResult {
   return feedback === undefined ? { correct: false } : { correct: false, feedback };
 }
 
-export function checkNumber(step: NumberStep, raw: string): CheckResult | 'invalid' {
+/** 拼算式的第 2 步也用這個判斷，所以只要求數字題判斷會用到的欄位（FormulaStep 也有）。 */
+export function checkNumber(step: Pick<NumberStep, 'answer' | 'tolerance' | 'wrongAnswers'>, raw: string): CheckResult | 'invalid' {
   const value = parseNumberInput(raw);
   if (value === null) return 'invalid';
   if (isClose(value, step.answer, step.tolerance)) return { correct: true };

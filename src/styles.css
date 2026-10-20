@@ -1043,6 +1043,419 @@ a.path-node:active .path-node-circle {
   font-weight: 800;
 }
 
+/* ---- 拼算式 ---- */
+
+/* 「第 1 步：拼算式」「第 2 步：算出答案」 */
+.lp-substep {
+  margin: 22px 0 10px;
+  color: var(--primary-text);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.lp-answer > .lp-substep:first-child {
+  margin-top: 0;
+}
+
+/* 答案列：拼好的磚塊依序排在這裡 */
+.lp-formula-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 68px;
+  padding: 8px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+}
+
+.lp-formula--correct .lp-formula-row {
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--correct-border);
+  background-color: var(--correct-soft);
+}
+
+.lp-formula--wrong .lp-formula-row {
+  border-width: 3px;
+  border-color: var(--wrong-border);
+  background-color: var(--wrong-soft);
+}
+
+/* 對、錯除了顏色，答案列最後還有勾或叉 */
+.lp-formula--correct .lp-formula-row::after,
+.lp-formula--wrong .lp-formula-row::after {
+  content: '';
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  -webkit-mask: var(--icon-check) center / contain no-repeat;
+  mask: var(--icon-check) center / contain no-repeat;
+  background-color: var(--correct);
+}
+
+.lp-formula--wrong .lp-formula-row::after {
+  -webkit-mask-image: var(--icon-cross);
+  mask-image: var(--icon-cross);
+  background-color: var(--wrong);
+}
+
+/* 下方的磚塊：放上去的留下同樣大小的空位，其他磚塊不會移動 */
+.lp-tile-bank {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.lp-tile {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 最小寬高由 FormulaInput 的 style 設定 */
+  padding: 6px 14px;
+  border: 2px solid var(--border-strong);
+  border-radius: 12px;
+  background-color: var(--surface);
+  box-shadow: 0 3px 0 var(--border-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lp-tile:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--border-strong);
+}
+
+@media (hover: hover) {
+  .lp-tile:not(:disabled):hover {
+    border-color: var(--primary);
+  }
+}
+
+.lp-tile:disabled {
+  cursor: default;
+}
+
+.lp-formula-row .lp-tile:disabled {
+  box-shadow: none;
+}
+
+.lp-tile-bank .lp-tile:disabled {
+  opacity: 0.5;
+}
+
+.lp-tile--ghost {
+  border-color: transparent;
+  background-color: var(--surface-2);
+  box-shadow: none;
+  color: transparent;
+  cursor: default;
+  user-select: none;
+}
+
+/* ---- 拉滑桿 ---- */
+
+.lp-slider-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+}
+
+.lp-slider-label {
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.lp-slider-value {
+  color: var(--primary-text);
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-slider--correct .lp-slider-value {
+  color: var(--correct);
+}
+
+.lp-slider--wrong .lp-slider-value {
+  color: var(--wrong);
+}
+
+/* 整條滑桿 44px 高、拉桿外圈透明，手指好按；看得到的拉桿是 32px 的圓。
+   拉過的那一段塗上主色：SliderInput 把百分比放在 --lp-slider-fill（Firefox 用 ::-moz-range-progress）。 */
+.lp-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lp-slider-input:disabled {
+  cursor: default;
+}
+
+.lp-slider-input::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--primary) var(--lp-slider-fill, 0%),
+    var(--surface-2) var(--lp-slider-fill, 0%)
+  );
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.lp-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  margin-top: -16px; /* (12 − 44) ÷ 2：拉桿置中在軌道上 */
+  border: 6px solid transparent;
+  border-radius: 50%;
+  background: var(--primary) padding-box;
+  box-shadow: inset 0 0 0 4px var(--surface);
+}
+
+.lp-slider-input::-moz-range-track {
+  height: 12px;
+  border-radius: 999px;
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.lp-slider-input::-moz-range-progress {
+  height: 12px;
+  border-radius: 999px;
+  background-color: var(--primary);
+}
+
+.lp-slider-input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border: 6px solid transparent;
+  border-radius: 50%;
+  background: var(--primary) padding-box;
+  box-shadow: inset 0 0 0 4px var(--surface);
+}
+
+/* 最小值、最大值寫在拉桿兩端的正下方 */
+.lp-slider-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.lp-slider-scale > span {
+  min-width: 44px;
+  text-align: center;
+}
+
+/* ---- 購物車動畫（components/sims/CartAnim.tsx）：顏色都用變數，淺色、深色模式都看得清楚 ---- */
+
+.lp-cart-anim {
+  display: block;
+  max-width: 420px;
+  height: auto;
+  margin: 16px auto 0;
+}
+
+.lp-cart-ground {
+  stroke: var(--border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 10 8;
+}
+
+.lp-cart-frame {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lp-cart-basket {
+  fill: var(--primary-soft);
+  stroke: var(--primary-text);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+.lp-cart-rib {
+  fill: none;
+  stroke: var(--primary-text);
+  stroke-width: 2;
+  opacity: 0.55;
+}
+
+.lp-cart-wheel {
+  fill: var(--surface);
+  stroke: var(--text);
+  stroke-width: 4;
+}
+
+/* 等加速度：位置和時間的平方成正比，用 easeInQuad 的曲線 */
+@keyframes lp-cart-go {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--lp-cart-travel));
+  }
+}
+
+.lp-cart-anim--play .lp-cart {
+  animation: lp-cart-go 1.6s cubic-bezier(0.11, 0, 0.5, 0) 0.2s both;
+}
+
+/* ---- 配對 ---- */
+
+/* 左欄、右欄各一行；MatchCard 用 grid-template-rows 設定列數，同一列的兩塊一樣高 */
+.lp-match {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.lp-match-item {
+  appearance: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 最小高度由 MatchCard 的 style 設定；左右多留一點，角落的勾、叉不會壓到字 */
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  box-shadow: 0 3px 0 var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lp-match-item:active:not([aria-disabled='true']) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+@media (hover: hover) {
+  .lp-match-item:not([aria-disabled='true']):hover {
+    border-color: var(--primary);
+  }
+}
+
+.lp-match-item--selected {
+  border-color: var(--primary);
+  background-color: var(--primary-soft);
+  box-shadow: 0 3px 0 var(--primary);
+}
+
+/* 配好了：打勾、不能再按；配錯：虛線框、打叉，閃一下就恢復。勾、叉放在右上角，文字不會因此換行跳動。 */
+.lp-match-item--matched,
+.lp-match-item--wrong {
+  border-width: 3px;
+  box-shadow: none;
+}
+
+.lp-match-item--matched {
+  border-color: var(--correct-border);
+  background-color: var(--correct-soft);
+  color: var(--correct);
+  cursor: default;
+}
+
+.lp-match-item--wrong {
+  border-style: dashed;
+  border-color: var(--wrong-border);
+  background-color: var(--wrong-soft);
+  color: var(--wrong);
+}
+
+.lp-match-item--matched::after,
+.lp-match-item--wrong::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 14px;
+  height: 14px;
+  -webkit-mask: var(--icon-check) center / contain no-repeat;
+  mask: var(--icon-check) center / contain no-repeat;
+  background-color: currentColor;
+}
+
+.lp-match-item--wrong::after {
+  -webkit-mask-image: var(--icon-cross);
+  mask-image: var(--icon-cross);
+}
+
+@keyframes lp-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-match-item--wrong {
+    animation: lp-shake 280ms ease-in-out;
+  }
+}
+
+/* 只給螢幕閱讀器的文字（例如配對的結果） */
+.lp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- 提示、回饋 ---- */
 
 /* 這兩個是 role="status" 的即時區域，空的時候也要留在畫面上（不可以 display: none），只是不佔空間。 */

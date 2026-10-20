@@ -3,6 +3,7 @@ import { XP_PER_FIRST_TRY, XP_PER_LESSON } from '../lib/progress';
 import type { Lesson, SimStep, Step } from '../lib/types';
 import { BusBallSim } from '../sims/BusBallSim';
 import { GuideRunner } from './GuideRunner';
+import { MatchCard } from './MatchCard';
 import { QuestionCard } from './QuestionCard';
 import { ConceptView } from './steps/ConceptView';
 import { useActionGuard } from './useActionGuard';
@@ -176,19 +177,20 @@ function LessonRun({ lesson, onComplete, onExit }: Props): React.JSX.Element {
     );
   }
 
-  function renderStep(current: Step): React.JSX.Element | null {
+  function renderStep(current: Step): React.JSX.Element {
     switch (current.kind) {
       case 'concept':
         return <ConceptView step={current} onContinue={advance} />;
       case 'sim':
         return <SimView step={current} onContinue={advance} />;
-      case 'formula':
-      case 'slider':
       case 'match':
-        return null; // TODO(Task 4)：拼算式、滑桿、配對的畫面
+        // 配對沒有引導、沒有看解答
+        return <MatchCard step={current} onFinish={finishQuestion} onCheck={() => setAnswered(true)} />;
       case 'choice':
       case 'number':
       case 'table':
+      case 'formula':
+      case 'slider':
         if (inGuide) return <GuideRunner steps={current.guide ?? []} onDone={finishGuide} />;
         return (
           <QuestionCard step={current} onFinish={finishQuestion} onRequestGuide={startGuide} onCheck={() => setAnswered(true)} />

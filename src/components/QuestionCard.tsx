@@ -1,14 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
-import type { ChoiceStep, NumberStep, TableStep } from '../lib/types';
+import { checkFormula } from '../lib/formula';
+import { checkSlider } from '../lib/slider';
+import type { QuestionStep } from '../lib/types';
+import { CartAnim } from './sims/CartAnim';
 import { ChoiceInput } from './steps/ChoiceInput';
+import { FormulaInput } from './steps/FormulaInput';
 import { NumberInput, formatNumber } from './steps/NumberInput';
+import { SliderInput } from './steps/SliderInput';
 import { TableInput } from './steps/TableInput';
 import { useActionGuard } from './useActionGuard';
-
-// TODO(Task 4)：拼算式（formula）和滑桿（slider）的畫面還沒做，QuestionCard 暫時只收舊的三種題型；Task 4 改回 QuestionStep。
-type QuestionStep = ChoiceStep | NumberStep | TableStep;
 
 // answering：作答中；correct：答對了；wrong：還不對；revealed：看了解答。
 type Phase = 'answering' | 'correct' | 'wrong' | 'revealed';
@@ -16,22 +18,37 @@ type Phase = 'answering' | 'correct' | 'wrong' | 'revealed';
 const NEED_NUMBER = '請先輸入數字';
 const NUMBER_ONLY = '只要填數字，不用寫單位';
 const NEED_CHOICE = '請先選一個答案';
+const NEED_FORMULA = '請先拼出算式';
 
-/** 看解答時，「正確答案」下面那一行。表格題的答案直接填進格子裡，所以沒有這一行。 */
-function solutionText(step: QuestionStep): string | null {
+function withUnit(value: number, unit: string | undefined): string {
+  return unit === undefined ? formatNumber(value) : `${formatNumber(value)} ${unit}`;
+}
+
+/**
+ * 看解答時，「正確答案」下面的幾行。表格題的答案直接填進格子裡，所以沒有；
+ * 拼算式同時顯示正確算式（第一個可接受的寫法，磚塊用空白隔開）和答案。
+ */
+function solutionLines(step: QuestionStep): string[] {
   switch (step.kind) {
-    case 'choice':
-      return step.options.find((option) => option.id === step.answer)?.label ?? null;
+    case 'choice': {
+      const label = step.options.find((option) => option.id === step.answer)?.label;
+      return label === undefined ? [] : [label];
+    }
     case 'number':
-      return step.unit === undefined ? formatNumber(step.answer) : `${formatNumber(step.answer)} ${step.unit}`;
+      return [withUnit(step.answer, step.unit)];
     case 'table':
-      return null;
+      return [];
+    case 'formula':
+      return [...(step.accepted.length > 0 ? [step.accepted[0].join(' ')] : []), withUnit(step.answer, step.unit)];
+    case 'slider':
+      return [withUnit(step.answer, step.unit)];
   }
 }
 
 /**
  * 一道題目：作答 →「檢查」→ 答對、答錯或看解答。
- * `onFinish(cleanFirstTry)`：第一次檢查就答對、也沒有看解答時是 true。輸入無效不算一次作答。
+ * 拼算式分兩步：先拼算式（拼對了才出現第 2 步），再填算出來的數字；兩步都在「作答中」這個階段裡。
+ * `onFinish(cleanFirstTry)`：第一次檢查就答對、也沒有看解答時是 true（拼算式要兩步都第一次就對）。輸入無效不算一次作答。
  * 只有同時傳入 `onRequestGuide`、題目也有 `guide` 時，答錯才會出現「一步一步來」；否則是「再試一次」。
  * `onCheck()`：每次按「檢查」、答案有效（不論對錯）時呼叫。
  */
@@ -52,11 +69,16 @@ export function QuestionCard(props: {
   const [numberRaw, setNumberRaw] = useState('');
   const [tableRaws, setTableRaws] = useState<string[]>(() => (step.kind === 'table' ? blankCells(step).map(() => '') : []));
   const [cellMarks, setCellMarks] = useState<(boolean | null)[]>([]);
+  // 拼算式：答案列上的磚塊（tiles 的索引，依序），以及算式是不是已經拼對、進到第 2 步。
+  const [placed, setPlaced] = useState<number[]>([]);
+  const [formulaDone, setFormulaDone] = useState(false);
+  const [sliderValue, setSliderValue] = useState(() => (step.kind === 'slider' ? step.initial : 0));
   const [retries, setRetries] = useState(0);
   const answerRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  // 每換一個階段（剛出現、檢查後、再試一次），按鈕都先等一下才有反應，連點不會跳過回饋。
-  const guard = useActionGuard(phase);
+  const stepTwoId = useId();
+  // 每換一個階段（剛出現、檢查後、再試一次、算式拼對進到第 2 步），按鈕都先等一下才有反應，連點不會跳過回饋。
+  const guard = useActionGuard(`${phase}:${formulaDone}`);
 
   const answering = phase === 'answering';
   const requestGuide = step.guide !== undefined && step.guide.length > 0 ? onRequestGuide : undefined;
@@ -66,40 +88,74 @@ export function QuestionCard(props: {
     if (phase !== 'answering') primaryRef.current?.focus();
   }, [phase]);
 
-  // 「再試一次」之後，焦點回到答案：答錯的第一格、選過的選項，或是輸入框。
+  // 「再試一次」之後，焦點回到答案：答錯的第一格、選過的選項、輸入框（含滑桿），或是拼算式的答案列。
   useEffect(() => {
     if (retries === 0) return;
     const root = answerRef.current;
     const target =
-      root?.querySelector<HTMLInputElement>('input[aria-invalid="true"], input:checked') ?? root?.querySelector<HTMLInputElement>('input');
+      root?.querySelector<HTMLElement>('input[aria-invalid="true"], input:checked') ??
+      root?.querySelector<HTMLElement>('input') ??
+      root?.querySelector<HTMLElement>('.lp-formula-row');
     target?.focus();
   }, [retries]);
 
+  // 算式拼對、出現第 2 步時，焦點移到數字輸入框。
+  useEffect(() => {
+    if (formulaDone) answerRef.current?.querySelector<HTMLInputElement>('input')?.focus();
+  }, [formulaDone]);
+
+  /** 這次「檢查」的結果；拼算式在第 1 步時看算式，第 2 步看數字。 */
+  function evaluate(): CheckResult | 'invalid' {
+    switch (step.kind) {
+      case 'choice':
+        return choice === null ? 'invalid' : checkChoice(step, choice);
+      case 'number':
+        return checkNumber(step, numberRaw);
+      case 'table': {
+        const checked = checkTable(step, tableRaws);
+        if (checked === 'invalid') return 'invalid';
+        setCellMarks(checked.cellCorrect);
+        return checked.result;
+      }
+      case 'formula':
+        if (formulaDone) return checkNumber(step, numberRaw);
+        // 拼錯、亂拼（括號不成對、符號連在一起）都只是答錯；只有什麼都沒放才是「請先拼出算式」。
+        return placed.length === 0 ? 'invalid' : checkFormula(step, placed.map((tile) => step.tiles[tile]));
+      case 'slider':
+        return checkSlider(step, sliderValue);
+    }
+  }
+
+  function invalidHint(): string {
+    switch (step.kind) {
+      case 'choice':
+        return NEED_CHOICE;
+      case 'formula':
+        if (!formulaDone) return NEED_FORMULA;
+        return hasUnitAfterNumber(numberRaw) ? NUMBER_ONLY : NEED_NUMBER; // 第 2 步和數字題一樣
+      case 'number':
+        return hasUnitAfterNumber(numberRaw) ? NUMBER_ONLY : NEED_NUMBER;
+      case 'table':
+        // 「10公尺」這種輸入：學習者打了數字，只是多打了單位，提示要說清楚是哪裡不對。
+        return tableRaws.some((raw) => hasUnitAfterNumber(raw)) ? NUMBER_ONLY : NEED_NUMBER;
+      case 'slider': // 滑桿永遠有值，不會走到這裡
+        return NEED_NUMBER;
+    }
+  }
+
   function check(): void {
     if (!answering) return;
-    let result: CheckResult | 'invalid';
-    if (step.kind === 'choice') {
-      result = choice === null ? 'invalid' : checkChoice(step, choice);
-    } else if (step.kind === 'number') {
-      result = checkNumber(step, numberRaw);
-    } else {
-      const checked = checkTable(step, tableRaws);
-      if (checked === 'invalid') {
-        result = 'invalid';
-      } else {
-        result = checked.result;
-        setCellMarks(checked.cellCorrect);
-      }
-    }
+    const result = evaluate();
     if (result === 'invalid') {
-      // 「10公尺」這種輸入：學習者打了數字，只是多打了單位，提示要說清楚是哪裡不對。
-      const typedUnit =
-        step.kind === 'number' ? hasUnitAfterNumber(numberRaw) : step.kind === 'table' && tableRaws.some((raw) => hasUnitAfterNumber(raw));
-      setHint(step.kind === 'choice' ? NEED_CHOICE : typedUnit ? NUMBER_ONLY : NEED_NUMBER);
+      setHint(invalidHint());
       return;
     }
     setHint(null);
     onCheck?.();
+    if (result.correct && step.kind === 'formula' && !formulaDone) {
+      setFormulaDone(true); // 算式對了，還在作答中：接著算答案
+      return;
+    }
     if (result.correct) {
       setPhase('correct');
       return;
@@ -122,6 +178,7 @@ export function QuestionCard(props: {
   }
 
   const describedBy = hint === null ? undefined : hintId;
+  const resultMark = phase === 'correct' ? 'correct' : phase === 'wrong' || phase === 'revealed' ? 'wrong' : null;
 
   function renderAnswer(): React.JSX.Element {
     switch (step.kind) {
@@ -156,7 +213,7 @@ export function QuestionCard(props: {
             onEnter={check}
             disabled={!answering}
             unit={step.unit}
-            mark={phase === 'correct' ? 'correct' : phase === 'wrong' || phase === 'revealed' ? 'wrong' : null}
+            mark={resultMark}
             invalid={hint !== null}
             labelledBy={promptId}
             describedBy={describedBy}
@@ -176,6 +233,53 @@ export function QuestionCard(props: {
             describedBy={describedBy}
           />
         );
+      case 'formula':
+        return (
+          <>
+            <h2 className="lp-substep">
+              第 1 步：拼算式
+            </h2>
+            <FormulaInput
+              tiles={step.tiles}
+              placed={placed}
+              onChange={(next) => {
+                setPlaced(next);
+                setHint(null);
+              }}
+              disabled={!answering || formulaDone}
+              mark={formulaDone ? 'correct' : resultMark}
+              describedBy={formulaDone ? undefined : describedBy}
+            />
+            {formulaDone && (
+              <>
+                <h2 id={stepTwoId} className="lp-substep">
+                  第 2 步：算出答案
+                </h2>
+                <NumberInput
+                  value={numberRaw}
+                  onChange={(raw) => {
+                    setNumberRaw(raw);
+                    setHint(null);
+                  }}
+                  onEnter={check}
+                  disabled={!answering}
+                  unit={step.unit}
+                  mark={resultMark}
+                  invalid={hint !== null}
+                  labelledBy={`${stepTwoId} ${promptId}`}
+                  describedBy={describedBy}
+                />
+              </>
+            )}
+          </>
+        );
+      case 'slider':
+        return (
+          <>
+            <SliderInput step={step} value={sliderValue} onChange={setSliderValue} onEnter={check} disabled={!answering} mark={resultMark} />
+            {phase === 'correct' && <CartAnim />}
+          </>
+        );
     }
   }
 
@@ -186,7 +290,7 @@ export function QuestionCard(props: {
   else if (requestGuide) primary = { label: '一步一步來', action: requestGuide };
   else primary = { label: '再試一次', action: retry };
 
-  const solution = solutionText(step);
+  const solution = solutionLines(step);
 
   return (
     <section className={`lp-card lp-card--${step.kind} lp-card--${phase}`}>
@@ -215,7 +319,11 @@ export function QuestionCard(props: {
         {phase === 'revealed' && (
           <>
             <p className="lp-feedback-title">正確答案</p>
-            {solution !== null && <p className="lp-solution">{solution}</p>}
+            {solution.map((line, i) => (
+              <p key={i} className="lp-solution">
+                {line}
+              </p>
+            ))}
             <p className="lp-explanation">{step.explanation}</p>
           </>
         )}
