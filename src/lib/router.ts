@@ -26,11 +26,16 @@ function sameRoute(a: Route, b: Route): boolean {
   return a.name === b.name && (a.name === 'map' || (b.name === 'lesson' && a.id === b.id));
 }
 
+export interface NavigateOptions {
+  /** true：取代目前這一筆瀏覽紀錄，不新增一筆（上一頁不會回到換頁前的畫面）。 */
+  replace?: boolean;
+}
+
 /**
- * 目前的路由，以及切換路由的函式。切換時會改網址的 hash（會留下瀏覽紀錄，上一頁可以回去），
- * 瀏覽器的上一頁、下一頁或手動改網址，也會透過 hashchange 更新畫面。
+ * 目前的路由，以及切換路由的函式。切換時會改網址的 hash：預設新增一筆瀏覽紀錄（上一頁可以回去），
+ * `{ replace: true }` 則取代目前這一筆。瀏覽器的上一頁、下一頁或手動改網址，也會透過 hashchange／popstate 更新畫面。
  */
-export function useHashRoute(): [Route, (r: Route) => void] {
+export function useHashRoute(): [Route, (r: Route, options?: NavigateOptions) => void] {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
 
   useEffect(() => {
@@ -40,12 +45,21 @@ export function useHashRoute(): [Route, (r: Route) => void] {
       setRoute((current) => (sameRoute(current, next) ? current : next));
     };
     window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
     sync(); // 第一次畫面到掛上監聽之間，網址可能已經變了
-    return () => window.removeEventListener('hashchange', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
   }, []);
 
-  const navigate = useCallback((next: Route) => {
-    if (!sameRoute(parseHash(window.location.hash), next)) window.location.hash = routeToHash(next);
+  const navigate = useCallback((next: Route, options?: NavigateOptions) => {
+    if (!sameRoute(parseHash(window.location.hash), next)) {
+      const hash = routeToHash(next);
+      // replaceState 不會觸發 hashchange；下面直接更新畫面。
+      if (options?.replace === true) window.history.replaceState(window.history.state, '', hash);
+      else window.location.hash = hash;
+    }
     // 不等 hashchange（它是非同步的），畫面立刻換。
     setRoute((current) => (sameRoute(current, next) ? current : next));
   }, []);

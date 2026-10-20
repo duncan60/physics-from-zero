@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
@@ -32,6 +32,16 @@ afterEach(() => {
   window.location.hash = '';
 });
 
+/** 瀏覽器的上一頁：等 popstate，再等緊接著的 hashchange 和畫面更新。 */
+async function goBack(): Promise<void> {
+  const popped = new Promise<void>((resolve) => window.addEventListener('popstate', () => resolve(), { once: true }));
+  window.history.back();
+  await act(async () => {
+    await popped;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 function storedProgress(): Progress | null {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   return raw === null ? null : (JSON.parse(raw) as Progress);
@@ -53,6 +63,14 @@ it('上完一課：存檔、回到 #/、頁首更新、下一課變成可以上'
   const next = screen.getByRole('link', { name: /速度與位置/ });
   expect(next).toHaveTextContent('可以上');
   expect(next).toHaveAttribute('aria-current', 'step');
+  // 按下的按鈕跟著上課畫面一起不見了：焦點移到 <main>，不會掉回 body
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+
+  // 上完回到地圖不留下歷史紀錄：按上一頁不會重新打開剛上完的課
+  await goBack();
+  expect(screen.queryByRole('button', { name: '假裝上完' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('已完成');
+  expect(screen.getByText('15 XP')).toBeInTheDocument();
 });
 
 it('再上一次已完成的課：XP 照加，completed 不重複', async () => {
@@ -79,6 +97,10 @@ it('中途離開：不存檔，回到 #/', async () => {
   expect(window.location.hash).toBe('#/');
   expect(storedProgress()).toBeNull();
   expect(screen.getByText('0 XP')).toBeInTheDocument();
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+
+  await goBack();
+  expect(screen.queryByRole('button', { name: '假裝離開' })).not.toBeInTheDocument();
 });
 
 it('存不進去（例如空間滿了）時，這次的進度仍然顯示在畫面上', async () => {

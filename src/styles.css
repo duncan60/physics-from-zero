@@ -130,7 +130,8 @@ button {
   outline-offset: 2px;
 }
 
-/* 程式移過去的焦點（換步驟時的容器）不畫外框 */
+/* 程式移過去的焦點（換頁時的 <main>、換步驟時的容器）不畫外框；按鈕、連結、輸入框照樣有 :focus-visible 外框 */
+.site-main:focus,
 .lp-stage:focus,
 .lp-guide-step:focus,
 .lp-complete:focus {

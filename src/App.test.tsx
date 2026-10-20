@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
@@ -23,6 +23,16 @@ afterEach(() => {
 
 function seedProgress(progress: Progress): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+}
+
+/** 瀏覽器的上一頁／下一頁：等 popstate（jsdom 和瀏覽器一樣是非同步的），再等緊接著的 hashchange 和畫面更新。 */
+async function traverse(action: () => void): Promise<void> {
+  const popped = new Promise<void>((resolve) => window.addEventListener('popstate', () => resolve(), { once: true }));
+  action();
+  await act(async () => {
+    await popped;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
 /** 地圖上某一課的那一格（鎖住的課不是連結，所以用 listitem 找）。 */
@@ -87,6 +97,12 @@ it('網址是不存在的課程，顯示「找不到這一課」和「回到地�
   expect(window.location.hash).toBe('#/');
   expect(screen.getByRole('link', { name: /慣性/ })).toBeInTheDocument();
   expect(screen.queryByText('找不到這一課')).not.toBeInTheDocument();
+  expect(document.activeElement).toBe(screen.getByRole('main')); // 換頁後焦點在主要內容，不是 body
+
+  // 「回到地圖」不留下歷史紀錄：按上一頁不會再看到「找不到這一課」
+  await traverse(() => window.history.back());
+  expect(screen.queryByText('找不到這一課')).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /慣性/ })).toBeInTheDocument();
 });
 
 it('網址是尚未解鎖的課程，顯示「這一課還沒解鎖」', async () => {
@@ -100,6 +116,11 @@ it('網址是尚未解鎖的課程，顯示「這一課還沒解鎖」', async (
 
   await user.click(screen.getByRole('button', { name: '回到地圖' }));
   expect(window.location.hash).toBe('#/');
+  expect(lessonItem('加速度')).toHaveTextContent('鎖住');
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+
+  await traverse(() => window.history.back());
+  expect(screen.queryByText('這一課還沒解鎖，先完成前面的課')).not.toBeInTheDocument();
   expect(lessonItem('加速度')).toHaveTextContent('鎖住');
 });
 
@@ -124,10 +145,14 @@ it('localStorage 拋出例外時，地圖照常顯示', async () => {
 it('從地圖點第一課：網址變成 #/lesson/1-1、捲回頂端；按「離開」回到 #/', async () => {
   const user = userEvent.setup();
   render(<App />);
+  expect(document.activeElement).toBe(document.body); // 第一次載入不移動焦點
 
   await user.click(screen.getByRole('link', { name: /慣性/ }));
   expect(window.location.hash).toBe('#/lesson/1-1');
   expect(screen.getByRole('region', { name: '慣性' })).toBeInTheDocument();
+  // 進入課程時，焦點交給上課畫面自己的第一個步驟，App 不搶
+  expect(screen.getByRole('region', { name: '慣性' })).toContainElement(document.activeElement as HTMLElement);
+  expect(document.activeElement).not.toBe(screen.getByRole('main'));
   expect(screen.getByRole('progressbar', { name: '課程進度' })).toBeInTheDocument();
   expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
   expect(screen.getByRole('heading', { name: '從零開始學物理' })).toBeInTheDocument(); // 頁首還在
@@ -137,9 +162,24 @@ it('從地圖點第一課：網址變成 #/lesson/1-1、捲回頂端；按「離
   expect(window.location.hash).toBe('#/');
   expect(screen.getByRole('link', { name: /慣性/ })).toBeInTheDocument();
   expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
+  // 按下的「離開」已經不見了，焦點移到 <main>，不會掉回 body
+  expect(document.activeElement).toBe(screen.getByRole('main'));
   // 中途離開不算完成
   expect(screen.getByRole('link', { name: /慣性/ })).toHaveTextContent('可以上');
   expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+});
+
+it('按「離開」回到地圖後，按上一頁不會回到這一課', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('link', { name: /慣性/ }));
+  await user.click(screen.getByRole('button', { name: '離開' }));
+  expect(window.location.hash).toBe('#/');
+
+  await traverse(() => window.history.back());
+  expect(screen.queryByRole('region', { name: '慣性' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '離開' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /慣性/ })).toBeInTheDocument();
 });
 
 it('頁首顯示存起來的 XP 和連續天數；地圖標出已完成、目前這一課、鎖住', () => {
@@ -197,7 +237,24 @@ it('重新整理已解鎖的課程網址，直接進入那一課', () => {
   expect(screen.getByRole('button', { name: '離開' })).toBeInTheDocument();
 });
 
-it('瀏覽器的上一頁、下一頁（hashchange）會切換畫面', async () => {
+it('瀏覽器的上一頁、下一頁會切換畫面', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('link', { name: /慣性/ })); // 從地圖打開一課：會留下歷史紀錄
+  expect(screen.getByRole('region', { name: '慣性' })).toBeInTheDocument();
+
+  await traverse(() => window.history.back());
+  expect(window.location.hash).not.toBe('#/lesson/1-1');
+  expect(screen.queryByRole('region', { name: '慣性' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /慣性/ })).toBeInTheDocument();
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+
+  await traverse(() => window.history.forward());
+  expect(window.location.hash).toBe('#/lesson/1-1');
+  expect(screen.getByRole('region', { name: '慣性' })).toBeInTheDocument();
+});
+
+it('手動改網址（hashchange）也會切換畫面', async () => {
   render(<App />);
   expect(screen.getByRole('link', { name: /慣性/ })).toBeInTheDocument();
 
