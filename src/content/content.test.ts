@@ -545,3 +545,82 @@ it('第 1 站複習：「距離 = 平均速度 × 時間」那一列的名稱說
   expect(row, '找不到「距離 = 平均速度 × 時間」那一列').toBeDefined();
   expect(row?.name).toContain('平均地變化');
 });
+
+// ---- 外部回饋的物理措辭：F = m × a 的 F 是合力、算式題假設沒有摩擦力、g 約 9.8 取 10、平均速度先下定義、速率 ----
+
+/** 主步驟裡的觀念卡內文（接成一個字串）；找不到或不是觀念卡就丟錯。 */
+function conceptText(lessonId: string, stepId: string): string {
+  const step = findStep(lessonId, stepId);
+  if (step?.kind !== 'concept') throw new Error(`${lessonId} 的 ${stepId} 不是觀念卡`);
+  return step.body.join('');
+}
+
+it('2-1 牛頓第二定律的觀念卡：F 是合力，說明合力是所有力加起來、方向相反的會抵消', () => {
+  const text = conceptText('2-1', 'newton-second');
+  expect(text).toContain('合力 = 質量 × 加速度');
+  expect(text).toContain('F 是合力');
+  expect(text).toContain('抵消');
+  expect(text).not.toMatch(/(?<!合)力 = 質量 × 加速度/);
+});
+
+it('2-1 的購物車算式題（滑桿、拼算式）都說明假設沒有摩擦力', () => {
+  for (const id of ['empty-cart-force', 'full-cart-accel']) {
+    const step = findStep('2-1', id);
+    expect(step && 'prompt' in step ? step.prompt : '', id).toContain('沒有摩擦力');
+  }
+});
+
+it('2-1 的 F = 0 題：題目和說明都包含「各個力互相抵消（合力是 0）」，答案和選項不變', () => {
+  const step = findStep('2-1', 'zero-force');
+  if (step?.kind !== 'choice') throw new Error('zero-force 不是選擇題');
+  expect(step.answer).toBe('inertia');
+  expect(step.options.map((o) => o.id)).toEqual(['inertia', 'top-of-throw', 'slows-down']);
+  for (const text of [step.prompt, step.explanation]) {
+    expect(text).toContain('互相抵消');
+    expect(text).toContain('合力是 0');
+  }
+});
+
+it('慣性（1-1 觀念卡、第 1 站重點）和第一定律（第 2 站重點）都包含「力互相抵消」的情況', () => {
+  expect(conceptText('1-1', 'inertia')).toContain('互相抵消');
+  expect(reviewOf(1)?.points.find((p) => p.startsWith('慣性'))).toContain('互相抵消');
+  const firstLaw = reviewOf(2)?.points.find((p) => p.startsWith('第一定律'));
+  expect(firstLaw).toContain('合力是 0');
+  expect(firstLaw).toContain('抵消');
+});
+
+it('第 2 站複習：牛頓第二定律的公式寫「合力」，F = m × a 說的方向是合力的方向', () => {
+  const review = reviewOf(2);
+  expect(review?.formulas.find((f) => f.name === '牛頓第二定律')?.formula).toBe('F = m × a（合力 = 質量 × 加速度）');
+  expect(JSON.stringify(review)).not.toMatch(/(?<!合)力和加速度(的方向一樣|同方向)/);
+});
+
+it('地球的 g：說約 9.8、這裡取 10，課程和複習都不說「地球的 g 是 10」', () => {
+  for (const lesson of lessons) expect(JSON.stringify(lesson), lesson.id).not.toMatch(/地球的 ?g 是 10|地球 10 公尺/);
+  for (const review of reviews) expect(JSON.stringify(review), `第 ${review.stationId} 站複習`).not.toMatch(/地球的 ?g 是 10|地球 10 公尺/);
+  expect(conceptText('2-4', 'mass-and-weight')).toContain('約 9.8，這裡取 10');
+  expect(reviewOf(2)?.formulas.find((f) => f.name === '重力加速度 g')?.formula).toContain('約 9.8（這裡取 10）');
+});
+
+it('1-5 平均速度的觀念卡：先下定義「走了多遠 ÷ 花了多久」，再說速度均勻地變時才是（一開始 + 最後）÷ 2', () => {
+  const text = conceptText('1-5', 'average-speed');
+  expect(text).toContain('走了多遠 ÷ 花了多久');
+  expect(text).toContain('每一秒都變一樣多');
+  expect(text.indexOf('走了多遠')).toBeLessThan(text.indexOf('（一開始的速度 + 最後的速度）÷ 2'));
+});
+
+it('1-5「為什麼是 ÷ 2」的頭尾配對，寫明是因為速度每一秒變一樣多', () => {
+  expect(conceptText('1-5', 'why-half')).toContain('每一秒變一樣多');
+});
+
+it('1-4 介紹正負號的重力觀念卡，也說明速度和速率的差別；1-4 仍然是 8 步', () => {
+  expect(conceptText('1-4', 'gravity')).toContain('速率');
+  expect(findLesson('1-4')?.steps).toHaveLength(8);
+});
+
+it('2-2 購物車停下來的主角：輪子和地面、輪軸之間的摩擦和阻力，選項 id 仍然是 friction', () => {
+  const step = findStep('2-2', 'which-force');
+  if (step?.kind !== 'choice') throw new Error('which-force 不是選擇題');
+  expect(step.answer).toBe('friction');
+  expect(step.options.find((o) => o.id === 'friction')?.label).toContain('輪軸');
+});
