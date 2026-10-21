@@ -4,7 +4,7 @@ import { REPORT_LABEL, REPO_ISSUES_URL } from '../lib/report';
 import { ReportLink } from './ReportLink';
 
 afterEach(() => {
-  window.location.hash = '';
+  window.history.replaceState(null, '', '/'); // 清掉查詢字串和 #
 });
 
 const props = { lessonId: '1-2', lessonTitle: '速度與位置', stepId: 'walk-table', stepKind: 'table' };
@@ -36,8 +36,18 @@ it('網址帶這一步的課程、步驟、題型，和目前頁面的網址（�
   const body = params.get('body') ?? '';
   expect(body).toContain('步驟：walk-table');
   expect(body).toContain('題型：table');
-  expect(body).toContain(`網址：${window.location.href}`);
-  expect(body).toContain('#/lesson/1-2');
+  expect(body).toContain(`網址：${window.location.origin}${window.location.pathname}#/lesson/1-2`);
+});
+
+it('網址不帶查詢字串（?後面可能有追蹤參數之類的東西），只有網站、路徑和 # 後面', () => {
+  window.history.replaceState(null, '', '/physics-from-zero/?utm_source=newsletter&fbclid=abc#/lesson/1-2');
+  render(<ReportLink {...props} />);
+  const href = screen.getByRole('link', { name: /回報問題/ }).getAttribute('href') ?? '';
+  const body = new URL(href).searchParams.get('body') ?? '';
+  expect(body).toContain(`網址：${window.location.origin}/physics-from-zero/#/lesson/1-2`);
+  expect(body).not.toContain('utm_source');
+  expect(body).not.toContain('fbclid');
+  expect(body).not.toContain('?');
 });
 
 it('點擊範圍至少 44px 高（高度寫在元素上，和其他按鈕一樣）', () => {

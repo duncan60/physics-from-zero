@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { LessonPlayer } from './components/LessonPlayer';
 import type { LessonResult } from './components/LessonPlayer';
 import { PathMap, canOpenLesson, canOpenReview } from './components/PathMap';
+import { PreviewBanner, PreviewPage } from './components/PreviewPage';
 import { SoundProvider } from './components/SoundContext';
 import { StationSummary } from './components/StationSummary';
 import { findLesson, isLastLessonOfStation, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './content/stations';
@@ -31,8 +32,15 @@ function routeKey(route: Route): string {
       return `lesson:${route.id}`;
     case 'review':
       return `review:${route.stationId}`;
+    case 'preview':
+      return 'preview';
+    case 'preview-run':
+      return `preview-run:${route.lessonId}:${route.step}`;
   }
 }
+
+/** 預覽時上完一課的回報：什麼都不存（不記進度、不加 XP），學習者留在完成畫面，按「回到地圖」才回預覽頁。 */
+function ignoreResult(): void {}
 
 // 本站重點與複習（總結頁、複習）還沒解鎖時的說明。
 const REVIEW_LOCKED = '本站重點與複習還沒解鎖，先完成這一站的每一課';
@@ -73,14 +81,14 @@ function NoticeIcon(props: { kind: 'missing' | 'locked' }): React.JSX.Element {
   );
 }
 
-/** 找不到課程、課程還沒解鎖（本站重點也一樣）時的畫面：一句說明，加上「回到地圖」。 */
-function Notice(props: { kind: 'missing' | 'locked'; message: string; onBack: () => void }): React.JSX.Element {
+/** 找不到課程、課程還沒解鎖（本站重點也一樣）時的畫面：一句說明，加上「回到地圖」（預覽頁的是「回到預覽頁」）。 */
+function Notice(props: { kind: 'missing' | 'locked'; message: string; onBack: () => void; backLabel?: string }): React.JSX.Element {
   return (
     <section className="notice">
       <NoticeIcon kind={props.kind} />
       <h2 className="notice-title">{props.message}</h2>
       <button type="button" className="button button--primary" onClick={props.onBack}>
-        回到地圖
+        {props.backLabel ?? '回到地圖'}
       </button>
     </section>
   );
@@ -165,9 +173,36 @@ export default function App(): React.JSX.Element {
     );
   }
 
+  /**
+   * 本機預覽頁（只在開發模式，見下面 renderPage 的 import.meta.env.DEV）：從任何一課（或複習）的任何一步開始上課。
+   * 不檢查解鎖，不呼叫 saveProgress／completeLesson、不碰 localStorage，也沒有「回報問題」連結（不從 localhost 開 issue）；
+   * 完成畫面的「回到地圖」和中途「離開」都只回預覽頁。步驟編號從 1 算起，上課畫面的 startAt 從 0 算起。
+   */
+  function renderPreviewRun(lessonId: string, step: number): React.JSX.Element {
+    const backToPreview = (): void => navigate({ name: 'preview' }, { replace: true });
+    const lesson = findLesson(lessonId);
+    if (lesson === undefined || step > lesson.steps.length) {
+      return <Notice kind="missing" message="找不到這一步" backLabel="回到預覽頁" onBack={backToPreview} />;
+    }
+    return (
+      <>
+        <PreviewBanner />
+        <LessonPlayer lesson={lesson} startAt={step - 1} onComplete={ignoreResult} onExit={backToPreview} showReportLinks={false} />
+      </>
+    );
+  }
+
   function renderPage(): React.JSX.Element {
-    if (route.name === 'map') return <PathMap progress={progress} onOpen={(next) => navigate(next)} />;
     if (route.name === 'review') return renderSummary(route.stationId);
+    // 只有開發模式：正式建置時 import.meta.env.DEV 是 false，Vite 會把這一段連同 PreviewPage 一起移除
+    // （parseHash 在正式網站也不會給出預覽的路由）。
+    if (import.meta.env.DEV) {
+      if (route.name === 'preview') {
+        return <PreviewPage onStart={(lessonId, step) => navigate({ name: 'preview-run', lessonId, step })} onBack={backToMap} />;
+      }
+      if (route.name === 'preview-run') return renderPreviewRun(route.lessonId, route.step);
+    }
+    if (route.name !== 'lesson') return <PathMap progress={progress} onOpen={(next) => navigate(next)} />;
     // 一課，或某一站的複習（review-站號）：複習和課程一樣上課、存進度，只是解鎖規則不同（canOpenLesson 會處理）。
     const lesson = findLesson(route.id);
     if (lesson === undefined) return <Notice kind="missing" message="找不到這一課" onBack={backToMap} />;

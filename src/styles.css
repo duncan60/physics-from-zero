@@ -931,6 +931,135 @@ a.path-node:active .path-node-circle {
   margin-top: 28px;
 }
 
+/* ---- 本機預覽（components/PreviewPage.tsx，只在開發模式有） ----
+   一個步驟一列：編號、步驟 id 與題型、「從這裡開始」。按鈕高度 44px（比一般按鈕矮一點，一頁有上百列）；
+   id 很長時可以換行，360px 寬也不會有水平捲軸。 */
+
+.preview {
+  padding: 16px 0 8px;
+}
+
+.preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preview-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.preview-back {
+  min-height: 44px;
+  padding: 6px 16px;
+  font-size: 0.9375rem;
+}
+
+.preview-lead {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.preview-station {
+  margin-top: 28px;
+}
+
+.preview-station-title {
+  margin: 0 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--border);
+  font-size: 1.1875rem;
+  font-weight: 800;
+}
+
+.preview-empty {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+}
+
+.preview-lesson {
+  margin-top: 16px;
+}
+
+.preview-lesson-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.preview-steps {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-step {
+  display: grid;
+  grid-template-columns: 2em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding-block: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.preview-step:first-child {
+  border-top: 0;
+}
+
+.preview-step-no {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.preview-step-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.preview-step-id {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.preview-step-kind {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.preview-step-start {
+  min-height: 44px;
+  padding: 6px 14px;
+  font-size: 0.9375rem;
+  box-shadow: none;
+}
+
+.preview-step-start:active {
+  transform: none;
+  box-shadow: none;
+}
+
+/* 預覽中上課畫面上方的提示列：這裡做的一切都不會留下紀錄 */
+.preview-banner {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius);
+  background-color: var(--info-soft);
+  color: var(--info);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 /* ---- 上課：外框、進度條 ---- */
 
 .lp-player {

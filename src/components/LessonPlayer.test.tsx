@@ -133,6 +133,10 @@ interface RenderOptions {
   now?: () => number;
   /** 傳給 LessonPlayer 的 onShowStationSummary（App 只在一站的最後一課傳）。 */
   onShowStationSummary?: () => void;
+  /** 傳給 LessonPlayer 的 startAt（預覽頁用：從第幾步開始，從 0 算起）。 */
+  startAt?: number;
+  /** 傳給 LessonPlayer 的 showReportLinks（預覽頁傳 false）。 */
+  showReportLinks?: boolean;
 }
 
 function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
@@ -140,7 +144,7 @@ function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
   const onExit = vi.fn();
   const user = userEvent.setup({ delay: SETTLE_MS, advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
   const fast = userEvent.setup({ delay: null });
-  const { strict, sound, now, onShowStationSummary } = options;
+  const { strict, sound, now, onShowStationSummary, startAt, showReportLinks } = options;
   function Wrapper(props: { children: ReactNode }): React.JSX.Element {
     const inner =
       sound === undefined ? (
@@ -152,7 +156,17 @@ function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
       );
     return strict === true ? <StrictMode>{inner}</StrictMode> : <>{inner}</>;
   }
-  const player = <LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} now={now} onShowStationSummary={onShowStationSummary} />;
+  const player = (
+    <LessonPlayer
+      lesson={lesson}
+      onComplete={onComplete}
+      onExit={onExit}
+      now={now}
+      onShowStationSummary={onShowStationSummary}
+      startAt={startAt}
+      showReportLinks={showReportLinks}
+    />
+  );
   const { rerender, unmount } = render(player, {
     wrapper: Wrapper,
   });
@@ -1126,4 +1140,99 @@ it('確認離開時，連結和這一步一起藏起來', async () => {
   expect(screen.getByRole('link', { name: /回報問題/ })).toBeVisible();
   await user.click(button('離開'));
   expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument(); // 藏起來的東西不在無障礙樹裡
+});
+
+// ---- startAt（預覽頁：從第幾步開始，從 0 算起）和 showReportLinks ----
+
+const progressNow = () => Number(screen.getByRole('progressbar', { name: '課程進度' }).getAttribute('aria-valuenow'));
+
+it('startAt：從那一步開始，前面的步驟不出現；進度條也從那裡算', async () => {
+  const { user, onComplete } = renderPlayer(guidedLesson, { startAt: 1 });
+  expect(screen.queryByText('這是一張觀念卡。')).not.toBeInTheDocument();
+  expect(screen.getByText('哪一個是對的？')).toBeInTheDocument();
+  expect(progressNow()).toBe(1);
+
+  await user.click(screen.getByRole('radio', { name: '選項 C' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  await user.type(textbox('1 + 2 是多少？'), '3');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  // 只有玩過的兩題算數
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ perfect: true, accuracy: 100 }));
+});
+
+it('沒有 startAt：和以前一樣從第一步開始', () => {
+  renderPlayer(guidedLesson);
+  expect(screen.getByText('這是一張觀念卡。')).toBeInTheDocument();
+  expect(progressNow()).toBe(0);
+});
+
+it('startAt 是最後一步：只有那一步，做完就是完成畫面', async () => {
+  const { user, onComplete } = renderPlayer(guidedLesson, { startAt: 2 });
+  expect(progressNow()).toBe(2);
+  await user.type(textbox('1 + 2 是多少？'), '3');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(onComplete).toHaveBeenCalledTimes(1);
+});
+
+it('startAt 超出範圍或不是整數：太大停在最後一步，其他（負數、小數、NaN）從第一步開始', () => {
+  for (const [startAt, expected] of [
+    [99, 2],
+    [3, 2],
+    [-1, 0],
+    [1.5, 0],
+    [Number.NaN, 0],
+  ] as const) {
+    const { unmount } = renderPlayer(guidedLesson, { startAt });
+    expect(progressNow(), `startAt ${startAt}`).toBe(expected);
+    unmount();
+  }
+});
+
+it('startAt 換了（同一課），就從新的那一步重新開始；沒換就不重來', async () => {
+  const onComplete = vi.fn();
+  const onExit = vi.fn();
+  const { rerender } = render(<LessonPlayer lesson={guidedLesson} startAt={1} onComplete={onComplete} onExit={onExit} />);
+  expect(progressNow()).toBe(1);
+  await userEvent.setup({ delay: null }).click(screen.getByRole('radio', { name: '選項 B' })); // 作答到一半的狀態
+
+  rerender(<LessonPlayer lesson={guidedLesson} startAt={1} onComplete={onComplete} onExit={onExit} />);
+  expect(screen.getByRole('radio', { name: '選項 B' })).toBeChecked(); // 沒換，原本的狀態還在
+
+  rerender(<LessonPlayer lesson={guidedLesson} startAt={2} onComplete={onComplete} onExit={onExit} />);
+  expect(progressNow()).toBe(2);
+  expect(screen.getByText('1 + 2 是多少？')).toBeInTheDocument();
+});
+
+it('showReportLinks 是 false：每一步（包括一步一步來裡的）都沒有「回報問題」', async () => {
+  const { user } = renderPlayer(guidedLesson, { showReportLinks: false });
+  expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument(); // 觀念卡
+  expect(screen.queryByText('需要 GitHub 帳號')).not.toBeInTheDocument();
+  await user.click(button('繼續'));
+
+  expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument(); // 題目
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await user.click(button('檢查'));
+  expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument(); // 答錯之後
+  await user.click(button('一步一步來'));
+  expect(screen.getByText('2 + 2 是多少？')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument(); // 引導裡
+});
+
+it('showReportLinks 預設和 true 都有「回報問題」，包括一步一步來裡', async () => {
+  for (const showReportLinks of [undefined, true]) {
+    const { user, unmount } = renderPlayer(guidedLesson, { startAt: 1, showReportLinks });
+    expect(screen.getByRole('link', { name: /回報問題/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: '選項 B' }));
+    await user.click(button('檢查'));
+    await user.click(button('一步一步來'));
+    expect(reportedStep()).toEqual({ id: 'pick-guide', kind: 'number' });
+    unmount();
+  }
 });

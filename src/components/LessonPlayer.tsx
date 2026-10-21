@@ -39,12 +39,25 @@ interface Props {
    * App 只在上完一站的最後一課、而且那一站有重點與複習時才給。
    */
   onShowStationSummary?: () => void;
+  /**
+   * 從第幾步開始（從 0 算起，預設 0）。本機預覽頁用來直接跳到某一步：前面的步驟不出現，進度條也從那裡算。
+   * 超過最後一步就停在最後一步；負數、小數、NaN 當作 0。換了 startAt 就整個重新開始。
+   */
+  startAt?: number;
+  /** 每一步下方要不要有「回報問題」連結，預設有。本機預覽頁不要（不該從 localhost 開 issue）。 */
+  showReportLinks?: boolean;
   /** 量時間用的時鐘（毫秒），預設 performance.now()；測試換成假的時鐘來控制「花了多久」。 */
   now?: () => number;
 }
 
 function defaultNow(): number {
   return performance.now();
+}
+
+/** startAt 換成真正的第一步：整數、落在 0 到最後一步之間；看不懂的值從 0 開始。 */
+function firstIndex(startAt: number | undefined, total: number): number {
+  if (startAt === undefined || !Number.isInteger(startAt) || startAt < 0) return 0;
+  return Math.min(startAt, Math.max(total - 1, 0));
 }
 
 /** 換步驟時把焦點移到新的步驟上，鍵盤和螢幕閱讀器使用者不會停在已經消失的按鈕上。 */
@@ -168,12 +181,12 @@ function CompleteView(props: {
  * 音效（有 SoundProvider 而且開著時）：答對 correct、答錯 wrong、完成畫面出現 complete，都在使用者按下按鈕的當下播放。
  */
 export function LessonPlayer(props: Props): React.JSX.Element {
-  // 換了一課就整個重新開始，不會把上一課的進度帶過來。
-  return <LessonRun key={props.lesson.id} {...props} />;
+  // 換了一課（或換了從哪一步開始）就整個重新開始，不會把上一課的進度帶過來。
+  return <LessonRun key={`${props.lesson.id}:${props.startAt ?? 0}`} {...props} />;
 }
 
-function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, now = defaultNow }: Props): React.JSX.Element {
-  const [index, setIndex] = useState(0);
+function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, showReportLinks = true, now = defaultNow }: Props): React.JSX.Element {
+  const [index, setIndex] = useState(() => firstIndex(startAt, lesson.steps.length));
   const [inGuide, setInGuide] = useState(false);
   // 每從引導回到原題一次就加一，讓原題用新的 key 重新掛載，重新作答。
   const [attempt, setAttempt] = useState(0);
@@ -300,7 +313,7 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, now = def
               steps={current.guide ?? []}
               onDone={finishGuide}
               onCheck={handleGuideCheck}
-              report={{ lessonId: lesson.id, lessonTitle: lesson.title }}
+              report={showReportLinks ? { lessonId: lesson.id, lessonTitle: lesson.title } : undefined}
             />
           );
         }
@@ -353,7 +366,7 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, now = def
       >
         {renderStep(step)}
         {/* 每一步卡片的下方都有「回報問題」；引導裡的步驟由 GuideRunner 放它自己的（用引導步驟自己的 id）。 */}
-        {!inGuide && <ReportLink lessonId={lesson.id} lessonTitle={lesson.title} stepId={step.id} stepKind={step.kind} />}
+        {!inGuide && showReportLinks && <ReportLink lessonId={lesson.id} lessonTitle={lesson.title} stepId={step.id} stepKind={step.kind} />}
       </div>
     </section>
   );

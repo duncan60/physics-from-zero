@@ -28,6 +28,12 @@ npm run build   # 檢查型別並打包到 dist/
 
 推送到 `main` 分支後，GitHub Actions 會自動建置並部署到 GitHub Pages；`npm test` 沒有通過就不會部署。
 
+### 預覽任何一課的任何一步
+
+開發模式（`npm run dev`）裡打開 `#/preview`（例如 `http://localhost:5173/physics-from-zero/#/preview`），會列出每一站、每一課、每一步（編號、步驟 id、題型）和每一站的複習；按「從這裡開始」就從那一步上課。不受解鎖限制，不會存進度、不加 XP，上課畫面也沒有「回報問題」連結。改了題目想看看長怎樣、或要重現回報的問題時很好用。
+
+正式網站沒有這一頁：建置時整個預覽頁都會被移除，`#/preview` 會回到地圖。
+
 ## 新增一課
 
 課程都是 `src/content/lessons/` 底下的 TypeScript 檔案，不用改畫面的程式碼，也不用改 `stations.ts` 或任何測試。**新增一課只要新增一個檔案**，網站和測試會自動讀到它。
