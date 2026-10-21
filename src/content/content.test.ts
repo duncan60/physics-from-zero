@@ -173,8 +173,8 @@ it('有 7 站，第 1 站有 5 課', () => {
   expect(stations[0].lessons.map((l) => l.id)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5']);
 });
 
-it('第 2 站有 1 課', () => {
-  expect(stations[1].lessons.map((l) => l.id)).toEqual(['2-1']);
+it('第 2 站有 4 課', () => {
+  expect(stations[1].lessons.map((l) => l.id)).toEqual(['2-1', '2-2', '2-3', '2-4']);
 });
 
 it('各站的 id 和標題依照 spec 的順序，只有第 1、2 站有課程', () => {
@@ -188,7 +188,7 @@ it('第 1 站的課程標題', () => {
 });
 
 it('第 2 站的課程標題', () => {
-  expect(stations[1].lessons.map((l) => l.title)).toEqual(['力與加速度']);
+  expect(stations[1].lessons.map((l) => l.title)).toEqual(['力與加速度', '東西為什麼會停下來', '作用力與反作用力', '質量和重量']);
 });
 
 it('orderedLessonIds 與各站課程一致', () => expect(orderedLessonIds).toEqual(lessons.map((l) => l.id)));
@@ -300,6 +300,17 @@ it('1-5 scooter-average 的引導：題目和說明寫的是同一個順序 (6 +
   expect(count.prompt).toContain('(6 + 18)');
   expect(count.explanation).toContain('(6 + 18)');
   expect(`${count.prompt}${count.explanation}`).not.toContain('(18 + 6)');
+});
+
+// 質量是 1 公斤，1.6 ÷ 1 和只放 1.6 算出來碰巧也是 1.6，但不是 W = m × g，要給回饋而不是算對。
+it('2-4 月球上的重量拼成 1 × 1.6；碰巧算對的 1.6 ÷ 1、1.6 仍然是錯的，而且有回饋', () => {
+  const step = findStep('2-4', 'moon-weight');
+  if (step?.kind !== 'formula') throw new Error('moon-weight 不是拼算式');
+  expect(sameFormula(step.accepted[0], tokens('1 × 1.6'))).toBe(true);
+  expect(checkFormula(step, tokens('1.6 × 1'))).toEqual({ correct: true });
+  for (const formula of ['1.6 ÷ 1', '1.6', '1 × 10']) {
+    expect(checkFormula(step, tokens(formula)), formula).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
+  }
 });
 
 it('1-5 最後一步是公式配對，三對照 spec', () => {

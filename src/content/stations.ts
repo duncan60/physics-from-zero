@@ -6,11 +6,14 @@ import { acceleration } from './lessons/1-3-acceleration';
 import { ballThrownUp } from './lessons/1-4-ball-thrown-up';
 import { howHigh } from './lessons/1-5-how-high';
 import { forceAndAcceleration } from './lessons/2-1-force-and-acceleration';
+import { friction } from './lessons/2-2-friction';
+import { actionReaction } from './lessons/2-3-action-reaction';
+import { massAndWeight } from './lessons/2-4-mass-and-weight';
 
 /** lessons 為空的站，地圖上顯示「即將推出」。 */
 export const stations: Station[] = [
   { id: 1, title: '運動', lessons: [inertia, speedPosition, acceleration, ballThrownUp, howHigh] },
-  { id: 2, title: '力與牛頓定律', lessons: [forceAndAcceleration] },
+  { id: 2, title: '力與牛頓定律', lessons: [forceAndAcceleration, friction, actionReaction, massAndWeight] },
   { id: 3, title: '能量與動量', lessons: [] },
   { id: 4, title: '波動、聲音與熱', lessons: [] },
   { id: 5, title: '電與磁', lessons: [] },
