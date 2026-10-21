@@ -9,6 +9,7 @@ const FULL_MASS = '20|滿車質量';
 const EMPTY_MASS = '10|空車質量';
 const BOTH_TWENTIES_SUBTRACTED =
   '力和質量兩個 20 都用上了，這點沒錯。不過 20 − 20 = 0，等於說推了速度也不會變。一直有 20 N 在推，滿車真的不會越來越快嗎？';
+const MASS_DIVIDED_BY_MASS = '想到要用除的，很好。不過滿車質量和空車質量，兩個都是質量。加速度要用力去除以質量：a = F ÷ m。';
 
 const forceAndAcceleration: Lesson = {
   id: '2-1',
@@ -19,16 +20,16 @@ const forceAndAcceleration: Lesson = {
       id: 'push-carts',
       prompt: '超市裡有兩台購物車，一台是空的，一台裝滿了水和米。你用一樣大的力推它們，哪一台的速度增加得比較快？',
       options: [
+        {
+          id: 'same',
+          label: '一樣快',
+          feedback: '兩台車受到的力一樣大，這點你說得對。不過車上裝的東西差很多。一樣用力推，兩台推起來的感覺會一樣嗎？',
+        },
         { id: 'empty', label: '空的那台' },
         {
           id: 'full',
           label: '裝滿的那台',
           feedback: '你注意到兩台車不一樣重，這正是關鍵。想像真的去推：裝滿水和米的車，是比較容易推動，還是比較難推動？',
-        },
-        {
-          id: 'same',
-          label: '一樣快',
-          feedback: '兩台車受到的力一樣大，這點你說得對。不過車上裝的東西差很多。一樣用力推，兩台推起來的感覺會一樣嗎？',
         },
       ],
       answer: 'empty',
@@ -132,6 +133,9 @@ const forceAndAcceleration: Lesson = {
         { tokens: [FORCE, '−', FULL_MASS], feedback: BOTH_TWENTIES_SUBTRACTED },
         { tokens: [FULL_MASS, '−', FORCE], feedback: BOTH_TWENTIES_SUBTRACTED },
         { tokens: [FORCE, '÷', EMPTY_MASS], feedback: '用力除以質量，這個想法很好。不過 10 公斤是空車的質量，這題推的是滿車：滿車是幾公斤？' },
+        // 質量 ÷ 質量：÷ 兩邊不能對調，兩種順序都要認得
+        { tokens: [FULL_MASS, '÷', EMPTY_MASS], feedback: MASS_DIVIDED_BY_MASS },
+        { tokens: [EMPTY_MASS, '÷', FULL_MASS], feedback: MASS_DIVIDED_BY_MASS },
       ],
       answer: 1,
       unit: '公尺/秒²',

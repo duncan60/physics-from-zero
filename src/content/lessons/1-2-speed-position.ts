@@ -43,12 +43,12 @@ const speedPosition: Lesson = {
       id: 'faster-ahead',
       prompt: '兩台車在同一條直路上，往同一個方向開。速度比較快就一定在前面嗎？',
       options: [
+        { id: 'not-always', label: '不一定' },
         {
           id: 'always',
           label: '一定，比較快的那台一定在前面',
           feedback: '如果兩台車從同一個地方出發，你說得沒錯，就像上一課的球和你。可是起點不一樣呢？假設 B 車一開始在 A 車前方 100 公尺，A 車每秒 10 公尺，B 車每秒 2 公尺。1 秒後，誰在前面？',
         },
-        { id: 'not-always', label: '不一定' },
       ],
       answer: 'not-always',
       explanation: '位置要看起點，也要看走了多遠。像 A 車從 0 公尺處出發、每秒 10 公尺，B 車從 100 公尺處出發、每秒 2 公尺：1 秒後 A 車在 10 公尺處，B 車在 102 公尺處，比較慢的 B 車反而在前面。',

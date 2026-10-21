@@ -3,7 +3,7 @@ import { blankCells } from '../lib/answer';
 import { acceptedNote, checkFormula, evaluateFormula, formulaTiles, parseFormula, sameFormula } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
-import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
+import type { ChoiceStep, ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
 import { findLesson, isLastLessonOfStation, orderedLessonIds, reviewAsLesson, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './stations';
 
 const lessons = stations.flatMap((s) => s.lessons);
@@ -475,6 +475,14 @@ it('2-1 full-cart-accel：力 ÷ 滿車質量算對；滿車質量 ÷ 力是錯�
   for (const formula of [['20|力', '−', '20|滿車質量'], ['20|滿車質量', '−', '20|力'], ['20|滿車質量', '×', '20|力']]) {
     expect(checkFormula(step, formula), formula.join(' ')).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
   }
+  // 質量 ÷ 質量：兩種順序都要認得，回饋說兩個都是質量、要用力去除（a = F ÷ m）
+  for (const formula of [['20|滿車質量', '÷', '10|空車質量'], ['10|空車質量', '÷', '20|滿車質量']]) {
+    const result = checkFormula(step, formula);
+    expect(result.correct, formula.join(' ')).toBe(false);
+    const text = result.correct ? '' : (result.feedback ?? '');
+    expect(text, formula.join(' ')).toContain('兩個都是質量');
+    expect(text, formula.join(' ')).toContain('a = F ÷ m');
+  }
 });
 
 it('第 2 站複習 bus-brake-size：質量 × 加速度大小算對（× 可以對調）；用了地球 g 是錯的，有回饋', () => {
@@ -582,6 +590,104 @@ it('第 2 站複習 bus-brake-size：題目沒寫到的「10」標示「地球 g
   ]);
 });
 
+// ---- 選擇題的正確答案不能靠位置或長度猜到（spec 第 3 批 1） ----
+// 每個課程／複習檔裡：
+// 1. 正確答案是最後一個選項的題目不超過一半；
+// 2. 不能連續三題選擇題的正確答案在同一個位置（第幾個相同，或選項數不同但都是最後一個）；
+// 3. 正確選項是最長（字數嚴格最多）的那一個的題目不超過一半，只算有 3 個以上選項的題目。
+// 引導裡的選擇題要答錯、按「一步一步來」才會出現，所以規則 1、2 兩種走法都檢查：
+// 只走主步驟（每題都答對），和打開每一個引導（引導裡的題目緊接在它的主步驟後面，依 withGuides 的順序）。
+// 規則 3 只看主步驟：引導是答錯之後一步一步帶到答案的鷹架，正確選項常要把話說完整
+// （例如 1-4「都不是：那一瞬間速度剛好是 0」）；選項長度只能靠改文字調整，重新排列解決不了。
+
+type ChoiceLike = Pick<ChoiceStep, 'id' | 'options' | 'answer'>;
+
+const isChoice = (s: Step | GuideStep): s is ChoiceStep => s.kind === 'choice';
+
+/** 學習者會依序遇到的選擇題：[走法, 題目]。 */
+function choicePaths(lesson: Lesson): [string, ChoiceStep[]][] {
+  return [
+    ['只走主步驟', lesson.steps.filter(isChoice)],
+    ['打開每一個引導', withGuides(lesson).filter(isChoice)],
+  ];
+}
+
+/** 正確答案是第幾個選項，從 0 開始。 */
+const answerIndex = (s: ChoiceLike): number => s.options.findIndex((o) => o.id === s.answer);
+
+const answerIsLast = (s: ChoiceLike): boolean => answerIndex(s) === s.options.length - 1;
+
+/** 正確選項的字數比其他每一個選項都多（一樣長不算）。 */
+function answerIsLongest(s: ChoiceLike): boolean {
+  const length = (label: string) => [...label].length;
+  const correct = s.options[answerIndex(s)];
+  return correct !== undefined && s.options.every((o) => o === correct || length(o.label) < length(correct.label));
+}
+
+/** 規則 1：正確答案是最後一個選項的題目超過一半時，回傳問題。 */
+function lastAnswerProblems(choices: ChoiceLike[]): string[] {
+  const last = choices.filter(answerIsLast);
+  if (last.length * 2 <= choices.length) return [];
+  return [`${choices.length} 題選擇題裡有 ${last.length} 題正確答案是最後一個（${last.map((s) => s.id).join('、')}），不能超過一半`];
+}
+
+/** 規則 2：連續三題正確答案在同一個位置（第幾個相同，或都是最後一個）。 */
+function samePositionRunProblems(choices: ChoiceLike[]): string[] {
+  const problems: string[] = [];
+  for (let i = 0; i + 3 <= choices.length; i++) {
+    const run = choices.slice(i, i + 3);
+    const ids = run.map((s) => s.id).join('、');
+    if (run.every(answerIsLast)) problems.push(`連續三題正確答案都是最後一個：${ids}`);
+    else if (run.every((s) => answerIndex(s) === answerIndex(run[0]))) problems.push(`連續三題正確答案都是第 ${answerIndex(run[0]) + 1} 個：${ids}`);
+  }
+  return problems;
+}
+
+/** 規則 3：有 3 個以上選項的題目裡，正確選項是最長的那一個超過一半時，回傳問題。 */
+function longestAnswerProblems(choices: ChoiceLike[]): string[] {
+  const counted = choices.filter((s) => s.options.length >= 3);
+  const longest = counted.filter(answerIsLongest);
+  if (longest.length * 2 <= counted.length) return [];
+  return [`${counted.length} 題 3 個以上選項的選擇題裡有 ${longest.length} 題正確選項最長（${longest.map((s) => s.id).join('、')}），不能超過一半`];
+}
+
+describe('選擇題位置與長度的檢查', () => {
+  /** 一題選擇題：選項依序是 labels，正確答案是第 at 個（從 0 開始）。 */
+  const q = (id: string, labels: string[], at: number): ChoiceLike => ({
+    id,
+    options: labels.map((label, i) => ({ id: `o${i}`, label })),
+    answer: `o${at}`,
+  });
+  const abc = ['甲', '乙', '丙'];
+
+  it('最後一個：剛好一半可以，超過一半不行；只有一題時不能是最後一個；沒有選擇題沒問題', () => {
+    expect(lastAnswerProblems([q('a', abc, 2), q('b', abc, 0)])).toEqual([]);
+    expect(lastAnswerProblems([q('a', abc, 2), q('b', abc, 0), q('c', ['是', '否'], 1)])).toHaveLength(1);
+    expect(lastAnswerProblems([q('a', abc, 2)])).toHaveLength(1);
+    expect(lastAnswerProblems([q('a', abc, 1)])).toEqual([]);
+    expect(lastAnswerProblems([])).toEqual([]);
+  });
+
+  it('連續三題：第幾個相同不行，選項數不同但都是最後一個也不行；中間隔一題不同就可以', () => {
+    expect(samePositionRunProblems([q('a', abc, 0), q('b', ['是', '否'], 0), q('c', abc, 0)])).toHaveLength(1);
+    expect(samePositionRunProblems([q('a', ['是', '否'], 1), q('b', abc, 2), q('c', [...abc, '丁'], 3)])).toHaveLength(1);
+    expect(samePositionRunProblems([q('a', abc, 1), q('b', abc, 1), q('c', abc, 0), q('d', abc, 1)])).toEqual([]);
+    expect(samePositionRunProblems([q('a', abc, 1), q('b', abc, 1)])).toEqual([]);
+  });
+
+  it('最長：只算 3 個以上選項；一樣長不算最長；剛好一半可以，超過一半不行', () => {
+    const longAnswer = q('long', ['短', '短', '比較長'], 2);
+    const tie = q('tie', ['一樣長', '一樣長', '短'], 0);
+    const short = q('short', ['比較長', '短', '短'], 1);
+    expect(longestAnswerProblems([longAnswer, short])).toEqual([]);
+    expect(longestAnswerProblems([longAnswer, longAnswer, short])).toHaveLength(1);
+    expect(longestAnswerProblems([longAnswer, tie])).toEqual([]);
+    // 2 個選項的題目不算進分子，也不算進分母
+    expect(longestAnswerProblems([short, q('two', ['短', '比較長'], 1)])).toEqual([]);
+    expect(longestAnswerProblems([longAnswer, q('two', ['比較長', '短'], 1)])).toHaveLength(1);
+  });
+});
+
 /** 每一課都要通過的內容檢查。每站的複習包裝成一課（reviewAsLesson）之後，也套用同一套。 */
 function lessonContentChecks(lesson: Lesson): void {
   it('5 到 8 個步驟', () => {
@@ -633,6 +739,16 @@ function lessonContentChecks(lesson: Lesson): void {
 
   it('沒有 emoji', () => {
     expect(JSON.stringify(lesson)).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+
+  describe('選擇題的正確答案不能靠位置或長度猜到', () => {
+    for (const [path, choices] of choicePaths(lesson)) {
+      it(`${path}：正確答案是最後一個選項的題目不超過一半`, () => expect(lastAnswerProblems(choices)).toEqual([]));
+      it(`${path}：不會連續三題正確答案在同一個位置`, () => expect(samePositionRunProblems(choices)).toEqual([]));
+    }
+    it('主步驟裡 3 個以上選項的題目，正確選項是最長的不超過一半', () => {
+      expect(longestAnswerProblems(lesson.steps.filter(isChoice))).toEqual([]);
+    });
   });
 }
 

@@ -18,6 +18,7 @@ const massAndWeight: Lesson = {
       id: 'moon-mass',
       prompt: '一顆 1 公斤的鐵球，從地球帶到月球上。它的質量會改變嗎？',
       options: [
+        { id: 'same', label: '不會，還是 1 公斤' },
         {
           id: 'changes',
           label: '會有改變，因為在月球上感覺比較輕',
@@ -28,7 +29,6 @@ const massAndWeight: Lesson = {
           label: '會變成 0，因為月球上沒有重力',
           feedback: '月球上的東西跳得比較高、掉得比較慢，看起來好像沒有重力。不過月球也會拉東西，只是拉得比地球小。而且質量是鐵球有多少料：帶到月球，料會不見嗎？',
         },
-        { id: 'same', label: '不會，還是 1 公斤' },
       ],
       answer: 'same',
       explanation: '質量是鐵球有多少「料」，帶到哪裡都不變，還是 1 公斤。在月球上感覺比較輕的，是重量。',
@@ -201,12 +201,12 @@ const massAndWeight: Lesson = {
           id: 'moon-push-mass',
           prompt: '在月球上，這顆鐵球的質量 m 是多少？',
           options: [
-            { id: 'one', label: '還是 1 公斤' },
             {
               id: 'smaller',
               label: '比 1 公斤小，因為月球上質量小',
               feedback: '你知道要先找 m，這步對了。不過第一題說過，在月球上感覺比較輕的是重量。鐵球帶到月球，料有變少嗎？',
             },
+            { id: 'one', label: '還是 1 公斤' },
             {
               id: 'moon-g',
               label: '1.6 公斤',
