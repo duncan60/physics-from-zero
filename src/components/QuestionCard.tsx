@@ -24,6 +24,22 @@ const NEED_FORMULA = '請先拼出算式';
 const NEED_SLIDE = '請先拉動滑桿';
 // 拼得不完整（括號不成對、符號在頭尾、兩個數字或符號連在一起）：算一次答錯，但告訴學習者錯在哪一類。
 const INCOMPLETE_FORMULA = '算式還沒拼完：括號要成對，符號兩邊都要有數字。';
+// 答錯、又沒有對應的回饋時，「還不對」下面的通用提示，不會只剩一句「還不對」。
+const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
+const GUIDE_SUGGESTION = '也可以按『一步一步來』。';
+const TABLE_RETRY_HINT = '標出來的格子再看一次：每一格之間變化的量一樣嗎？';
+
+/**
+ * 答錯、沒有對應的回饋時的通用提示：數字題和拼算式的第 2 步（算出答案）是同一句，有「一步一步來」按鈕時再提一下它；
+ * 表格題請他再看標出來的格子。其他（選擇題、拼算式的第 1 步、滑桿）的回饋都由內容提供，這裡不補。
+ */
+function retryHint(step: QuestionStep, formulaDone: boolean, canGuide: boolean): string | null {
+  if (step.kind === 'table') return TABLE_RETRY_HINT;
+  if (step.kind === 'number' || (step.kind === 'formula' && formulaDone)) {
+    return canGuide ? `${NUMBER_RETRY_HINT}${GUIDE_SUGGESTION}` : NUMBER_RETRY_HINT;
+  }
+  return null;
+}
 
 function withUnit(value: number, unit: string | undefined): string {
   return unit === undefined ? formatNumber(value) : `${formatNumber(value)} ${unit}`;
@@ -108,6 +124,8 @@ export function QuestionCard(props: {
   // 從引導回來、算式已經放在答案列上時也看得到。只是多一句話，不改變對錯、也不影響「第一次就答對」。
   const formulaNote = step.kind === 'formula' && formulaDone ? acceptedNote(step, placed.map((tile) => step.tiles[tile])) : null;
   const requestGuide = step.guide !== undefined && step.guide.length > 0 ? onRequestGuide : undefined;
+  // 「還不對」下面那一句：題目給的回饋優先，沒有的話用通用提示（提不提「一步一步來」跟著按鈕有沒有出現）。
+  const wrongText = feedback ?? retryHint(step, formulaDone, requestGuide !== undefined);
 
   // 檢查之後，焦點移到主要按鈕（從輸入框按 Enter 檢查時，輸入框會被停用）。
   useEffect(() => {
@@ -369,7 +387,7 @@ export function QuestionCard(props: {
         {phase === 'wrong' && (
           <>
             <p className="lp-feedback-title">還不對</p>
-            {feedback !== null && <p className="lp-feedback-text">{feedback}</p>}
+            {wrongText !== null && <p className="lp-feedback-text">{wrongText}</p>}
           </>
         )}
         {phase === 'revealed' && (
@@ -393,11 +411,11 @@ export function QuestionCard(props: {
       </div>
       <div className="lp-actions">
         {/* 同一顆按鈕依階段換文字，焦點留在原處，按 Enter 或空白鍵就能一路往下（每換一次階段先等 ACTION_GUARD_MS）。 */}
-        <button ref={primaryRef} type="button" className="lp-button lp-button--primary" onClick={guard(() => primary.action())}>
+        <button ref={primaryRef} type="button" {...guard(() => primary.action(), 'lp-button lp-button--primary')}>
           {primary.label}
         </button>
         {phase === 'wrong' && (
-          <button type="button" className="lp-button lp-button--secondary" onClick={guard(() => setPhase('revealed'))}>
+          <button type="button" {...guard(() => setPhase('revealed'), 'lp-button lp-button--secondary')}>
             看解答
           </button>
         )}

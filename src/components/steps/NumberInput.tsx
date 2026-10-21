@@ -27,10 +27,15 @@ function toggleSign(raw: string): string {
   return `-${text}`;
 }
 
+/** 輸入框下方的格式提示。沒有單位的題目不說「單位已經寫好了」。 */
+export const FORMAT_HINT = '只要填數字，可以是負數（按 ±）或小數；單位已經寫好了';
+export const FORMAT_HINT_NO_UNIT = '只要填數字，可以是負數（按 ±）或小數';
+
 /**
- * 數字題的輸入框。用 type="text" 加 inputMode="decimal"：手機會跳出數字鍵盤，
+ * 數字題的輸入框（拼算式的第 2 步也用這個）。用 type="text" 加 inputMode="decimal"：手機會跳出數字鍵盤，
  * 但仍然接受全形數字和「−」（type="number" 會把它們擋掉）。
  * iPhone 的小數鍵盤沒有負號鍵，所以旁邊有「±」按鈕。每一題都有，不只答案是負數的題目，才不會洩漏答案。
+ * 下方一行小字說明可以填什麼（FORMAT_HINT），也接在輸入框的說明（aria-describedby）裡：單位、格式提示，再來才是外面傳進來的提示。
  */
 export function NumberInput(props: {
   value: string;
@@ -45,6 +50,7 @@ export function NumberInput(props: {
 }): React.JSX.Element {
   const { value, onChange, onEnter, disabled, unit, mark, invalid, labelledBy, describedBy } = props;
   const unitId = useId();
+  const formatId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [signToggles, setSignToggles] = useState(0);
 
@@ -57,44 +63,49 @@ export function NumberInput(props: {
     input.setSelectionRange(input.value.length, input.value.length);
   }, [signToggles]);
 
-  const description = [unit !== undefined ? unitId : null, describedBy].filter(Boolean).join(' ') || undefined;
+  const description = [unit !== undefined ? unitId : null, formatId, describedBy].filter(Boolean).join(' ');
   const classes = ['lp-number'];
   if (mark) classes.push(`lp-number--${mark}`);
   return (
-    <div className={classes.join(' ')}>
-      <button
-        type="button"
-        className="lp-sign"
-        aria-label="切換正負號"
-        disabled={disabled}
-        onClick={() => {
-          inputRef.current?.focus(); // 在點擊當下就聚焦，iPhone 才會叫出鍵盤
-          onChange(toggleSign(value));
-          setSignToggles((n) => n + 1);
-        }}
-        style={{ minHeight: 44, minWidth: 44 }}
-      >
-        ±
-      </button>
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="decimal"
-        autoComplete="off"
-        className="lp-number-input"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onEnterKey(onEnter)}
-        disabled={disabled}
-        aria-labelledby={labelledBy}
-        aria-describedby={description}
-        aria-invalid={invalid || undefined}
-      />
-      {unit !== undefined && (
-        <span id={unitId} className="lp-unit">
-          {unit}
-        </span>
-      )}
-    </div>
+    <>
+      <div className={classes.join(' ')}>
+        <button
+          type="button"
+          className="lp-sign"
+          aria-label="切換正負號"
+          disabled={disabled}
+          onClick={() => {
+            inputRef.current?.focus(); // 在點擊當下就聚焦，iPhone 才會叫出鍵盤
+            onChange(toggleSign(value));
+            setSignToggles((n) => n + 1);
+          }}
+          style={{ minHeight: 44, minWidth: 44 }}
+        >
+          ±
+        </button>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          className="lp-number-input"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onEnterKey(onEnter)}
+          disabled={disabled}
+          aria-labelledby={labelledBy}
+          aria-describedby={description}
+          aria-invalid={invalid || undefined}
+        />
+        {unit !== undefined && (
+          <span id={unitId} className="lp-unit">
+            {unit}
+          </span>
+        )}
+      </div>
+      <p id={formatId} className="lp-format-hint">
+        {unit === undefined ? FORMAT_HINT_NO_UNIT : FORMAT_HINT}
+      </p>
+    </>
   );
 }

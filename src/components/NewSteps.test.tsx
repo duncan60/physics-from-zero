@@ -88,7 +88,7 @@ const matchStep: MatchStep = {
   explanation: '三個算法都配好了。',
 };
 
-// 按鈕在畫面換了之後的一小段時間內不會有反應（防連點，約 400 ms），所以和 LessonPlayer.test.tsx 一樣用假的時鐘：
+// 按鈕在畫面換了之後的一小段時間內不會有反應（防連點，約 250 ms），所以和 LessonPlayer.test.tsx 一樣用假的時鐘：
 // `user` 每個動作之前都會等 SETTLE_MS，像一般人一樣按。
 const SETTLE_MS = 500;
 
@@ -120,6 +120,9 @@ function mockReducedMotion(): void {
 }
 
 const INCOMPLETE = '算式還沒拼完：括號要成對，符號兩邊都要有數字。';
+const FORMAT_HINT = '只要填數字，可以是負數（按 ±）或小數；單位已經寫好了';
+const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
+const NUMBER_GUIDE_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？也可以按『一步一步來』。';
 
 const button = (name: string) => screen.getByRole('button', { name });
 const queryButton = (name: string) => screen.queryByRole('button', { name });
@@ -261,7 +264,8 @@ it('拼算式：拼成已知錯誤算式 → 「還不對」與那則回饋；�
   const input = screen.getByRole('textbox', { name: /第 2 步：算出答案/ });
   expect(input).toHaveFocus();
   expect(input).toHaveAttribute('inputmode', 'decimal');
-  expect(input).toHaveAccessibleDescription('公尺/秒²');
+  expect(input).toHaveAccessibleDescription(`公尺/秒² ${FORMAT_HINT}`); // 單位和格式提示
+  expect(screen.getByText(FORMAT_HINT)).toBeInTheDocument();
   expect(button('切換正負號')).toBeInTheDocument();
   expect(screen.queryByRole('group', { name: '磚塊' })).not.toBeInTheDocument();
   expect(names(row())).toEqual(['20', '除以', '20']);
@@ -299,6 +303,7 @@ it('拼算式：兩步都第一次就對 → onFinish(true)；任何一步錯過
   await card.user.click(button('檢查'));
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText('400 是 20 × 20，加速度要用除的。')).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument(); // 有對應的回饋，就不加通用提示
   expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
   await card.user.click(button('再試一次'));
   expect(input).toHaveValue('400');
@@ -936,7 +941,7 @@ it('拼算式第 2 步：不接受分數（20/20 不能代替算出答案 1）�
     await user.type(input, raw);
     await user.click(button('檢查'));
     expect(screen.getByText('請算出答案，填一個數字'), raw).toBeInTheDocument();
-    expect(input).toHaveAccessibleDescription('公尺/秒² 請算出答案，填一個數字'); // 單位加上提示
+    expect(input).toHaveAccessibleDescription(`公尺/秒² ${FORMAT_HINT} 請算出答案，填一個數字`); // 單位、格式提示，加上這次的提示
     expect(input).toHaveAttribute('aria-invalid', 'true');
     expect(screen.queryByText('只要填數字，不用寫單位'), raw).not.toBeInTheDocument();
     expect(screen.queryByText('還不對'), raw).not.toBeInTheDocument();
@@ -1047,4 +1052,35 @@ it('LessonPlayer：配對每配一次播一次音效，全部配完題目區彈�
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
   expect(kinds()).toEqual(['wrong', 'correct', 'correct', 'correct', 'complete']);
   expect(screen.getByText('正確率 0%')).toBeInTheDocument(); // 配錯過一次，這一題不算一次答對
+});
+
+it('拼算式第 2 步答錯、沒有對應的回饋：和數字題一樣是通用提示；有引導時多一句「也可以按『一步一步來』」', async () => {
+  // 沒有引導：只有通用提示
+  let user = setupUser();
+  const { unmount } = render(<QuestionCard step={formulaStep} onFinish={vi.fn()} />);
+  await user.type(await solveFormula(user), '2');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText(NUMBER_RETRY_HINT)).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_GUIDE_HINT)).not.toBeInTheDocument();
+  unmount();
+
+  // 有引導
+  user = setupUser();
+  const guided: FormulaStep = { ...formulaStep, guide: [{ kind: 'concept', id: 'cart-guide', body: ['加速度 = 力 ÷ 質量。'] }] };
+  render(<QuestionCard step={guided} onFinish={vi.fn()} onRequestGuide={vi.fn()} />);
+  await user.type(await solveFormula(user), '2');
+  await user.click(button('檢查'));
+  expect(screen.getByText(NUMBER_GUIDE_HINT)).toBeInTheDocument();
+  expect(button('一步一步來')).toBeInTheDocument();
+});
+
+it('拼算式第 1 步答錯（沒有對應的回饋）：維持原樣，不出現數字題的提示', async () => {
+  const user = setupUser();
+  render(<QuestionCard step={formulaStep} onFinish={vi.fn()} />);
+  await build(user, ['20', M, '10']);
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument();
+  expect(screen.queryByText(FORMAT_HINT)).not.toBeInTheDocument(); // 還沒有數字輸入框
 });

@@ -11,7 +11,7 @@ import type { Progress } from './lib/progress';
 
 const lessons = stations.flatMap((station) => station.lessons);
 
-// 防連點（換畫面後 400 ms 內的按鈕不算數），和 App.lessons.test.tsx 一樣用假的時鐘。
+// 防連點（換畫面後約 250 ms 內的按鈕不算數），和 App.lessons.test.tsx 一樣用假的時鐘。
 const SETTLE_MS = 500;
 
 beforeEach(() => {

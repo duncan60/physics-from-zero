@@ -219,7 +219,8 @@ button {
   transition:
     transform 80ms ease-out,
     box-shadow 80ms ease-out,
-    filter 150ms ease-out;
+    filter 150ms ease-out,
+    opacity 150ms ease-out;
 }
 
 .button--primary,
@@ -245,6 +246,31 @@ button {
   .button:hover,
   .lp-button:hover {
     filter: brightness(1.05);
+  }
+}
+
+/* 防連點的保護期間（約 250 毫秒，useActionGuard）：按鈕先淡一點，看得出來馬上就能按。
+   一變淡就是淡的（不漸變），時間到再用上面的 opacity 轉場恢復；按下去也不會有「按到了」的下沉效果。
+   不用 disabled（焦點會跳走），只有這個 class 和 aria-disabled="true"。 */
+.lp-button--guarded,
+.lp-button--guarded:active {
+  opacity: 0.55;
+  transform: none;
+  cursor: default;
+  transition: none;
+}
+
+.lp-button--guarded:active {
+  box-shadow: 0 4px 0 var(--border);
+}
+
+.lp-button--primary.lp-button--guarded:active {
+  box-shadow: 0 4px 0 var(--primary-strong);
+}
+
+@media (hover: hover) {
+  .lp-button--guarded:hover {
+    filter: none;
   }
 }
 
@@ -1537,6 +1563,14 @@ a.path-node:active .path-node-circle {
   color: var(--text-muted);
   font-size: 1.125rem;
   font-weight: 600;
+}
+
+/* 數字輸入框下方的格式提示（數字題、拼算式第 2 步）：一行小字，窄螢幕自動換行。 */
+.lp-format-hint {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .lp-number--correct .lp-number-input {

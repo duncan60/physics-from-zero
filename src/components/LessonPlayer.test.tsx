@@ -120,7 +120,7 @@ const comboLesson: Lesson = {
   steps: [doubleStep(1), doubleStep(2), doubleStep(3), { kind: 'concept', id: 'pause', body: ['休息一下。'] }, doubleStep(4), doubleStep(5)],
 };
 
-// 按鈕在畫面換了之後的一小段時間內不會有反應（防連點，約 400 ms），所以測試用假的時鐘：
+// 按鈕在畫面換了之後的一小段時間內不會有反應（防連點，約 250 ms），所以測試用假的時鐘：
 // `user` 每個動作的前後都會等 SETTLE_MS，像一般人一樣按；`fast` 完全不等，用來模擬連點。
 const SETTLE_MS = 500;
 
@@ -1291,4 +1291,123 @@ it('showReportLinks 預設和 true 都有「回報問題」，包括一步一步
     expect(reportedStep()).toEqual({ id: 'pick-guide', kind: 'number' });
     unmount();
   }
+});
+
+// ---- 試玩回饋：按鈕保護看得出來、答錯一定有提示、數字格式提示 ----
+
+const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
+const NUMBER_GUIDE_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？也可以按『一步一步來』。';
+const TABLE_RETRY_HINT = '標出來的格子再看一次：每一格之間變化的量一樣嗎？';
+const FORMAT_HINT = '只要填數字，可以是負數（按 ±）或小數；單位已經寫好了';
+const FORMAT_HINT_NO_UNIT = '只要填數字，可以是負數（按 ±）或小數';
+
+/** 有引導、有一個已知錯誤答案的數字題。 */
+const guidedNumberLesson: Lesson = {
+  id: 'test-guided-number',
+  title: '測試數字引導',
+  steps: [
+    {
+      kind: 'number',
+      id: 'speed',
+      prompt: '10 秒走 50 公尺，速度是多少？',
+      answer: 5,
+      unit: '公尺/秒',
+      wrongAnswers: [{ value: 500, feedback: '500 是 50 × 10，速度要用除的。' }],
+      explanation: '50 ÷ 10 = 5 公尺/秒。',
+      guide: [{ kind: 'concept', id: 'speed-guide', body: ['速度 = 距離 ÷ 時間。'] }],
+    },
+  ],
+};
+
+it('回饋出現後，按鈕先淡色（aria-disabled）一下：點了沒反應；時間到自動恢復，點了就有反應', async () => {
+  const { user, fast } = renderPlayer(guidedLesson);
+  await user.click(button('繼續'));
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await fast.click(button('檢查'));
+
+  // 剛換成「一步一步來」「看解答」：看得出來還不能按（不是 disabled，焦點留在主要按鈕上）
+  for (const name of ['一步一步來', '看解答']) {
+    expect(button(name), name).toHaveAttribute('aria-disabled', 'true');
+    expect(button(name), name).toHaveClass('lp-button', 'lp-button--guarded');
+    expect(button(name), name).not.toBeDisabled();
+  }
+  expect(button('一步一步來')).toHaveFocus();
+  await fast.click(button('一步一步來'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.queryByText('2 + 2 是多少？')).not.toBeInTheDocument();
+
+  // 約 250 毫秒後就恢復
+  act(() => {
+    vi.advanceTimersByTime(250);
+  });
+  for (const name of ['一步一步來', '看解答']) {
+    expect(button(name), name).not.toHaveAttribute('aria-disabled');
+    expect(button(name), name).not.toHaveClass('lp-button--guarded');
+  }
+  await fast.click(button('一步一步來'));
+  expect(screen.getByText('2 + 2 是多少？')).toBeInTheDocument();
+});
+
+it('觀念卡的「繼續」剛出現時也是淡色，時間到恢復', () => {
+  renderPlayer(conceptsLesson);
+  expect(button('繼續')).toHaveAttribute('aria-disabled', 'true');
+  expect(button('繼續')).toHaveClass('lp-button--guarded');
+  settle();
+  expect(button('繼續')).not.toHaveAttribute('aria-disabled');
+  expect(button('繼續')).not.toHaveClass('lp-button--guarded');
+});
+
+it('數字題答錯、沒有對應的回饋：「還不對」加上通用提示（沒有引導時不提「一步一步來」）', async () => {
+  const { user } = renderPlayer(plainLesson, { startAt: 1 });
+  await user.type(screen.getByRole('textbox', { name: '3 減 0 是多少？' }), '5');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText(NUMBER_RETRY_HINT)).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_GUIDE_HINT)).not.toBeInTheDocument();
+  expect(button('再試一次')).toBeInTheDocument();
+
+  // 再試一次：提示收起來
+  await user.click(button('再試一次'));
+  expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument();
+});
+
+it('有引導的數字題答錯、沒有對應的回饋：通用提示多一句「也可以按『一步一步來』」', async () => {
+  const { user } = renderPlayer(guidedNumberLesson);
+  await user.type(screen.getByRole('textbox', { name: '10 秒走 50 公尺，速度是多少？' }), '7');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText(NUMBER_GUIDE_HINT)).toBeInTheDocument();
+  expect(button('一步一步來')).toBeInTheDocument();
+});
+
+it('數字題答錯、有對應的回饋：只顯示那則回饋，不加通用提示', async () => {
+  const { user } = renderPlayer(guidedNumberLesson);
+  await user.type(screen.getByRole('textbox', { name: '10 秒走 50 公尺，速度是多少？' }), '500');
+  await user.click(button('檢查'));
+  expect(screen.getByText('500 是 50 × 10，速度要用除的。')).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_GUIDE_HINT)).not.toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument();
+});
+
+it('表格題答錯：「還不對」加上通用提示', async () => {
+  const { user } = renderPlayer(tableLesson);
+  await user.type(screen.getByRole('textbox', { name: '速度，1 秒' }), '8');
+  await user.type(screen.getByRole('textbox', { name: '速度，2 秒' }), '7');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText(TABLE_RETRY_HINT)).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument();
+});
+
+it('數字輸入框下方有格式提示，輸入框的說明也念得到', () => {
+  renderPlayer(plainLesson, { startAt: 1 });
+  expect(screen.getByText(FORMAT_HINT)).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: '3 減 0 是多少？' })).toHaveAccessibleDescription(`公尺 ${FORMAT_HINT}`);
+});
+
+it('沒有單位的數字題：格式提示不說「單位已經寫好了」', () => {
+  renderPlayer(guidedLesson, { startAt: 2 });
+  expect(screen.getByText(FORMAT_HINT_NO_UNIT)).toBeInTheDocument();
+  expect(screen.queryByText(FORMAT_HINT)).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: '1 + 2 是多少？' })).toHaveAccessibleDescription(FORMAT_HINT_NO_UNIT);
 });

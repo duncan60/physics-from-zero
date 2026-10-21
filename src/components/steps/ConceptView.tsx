@@ -13,7 +13,7 @@ export function ConceptView(props: { step: ConceptStep; onContinue: () => void }
         </p>
       ))}
       <div className="lp-actions">
-        <button type="button" className="lp-button lp-button--primary" onClick={guard(onContinue)}>
+        <button type="button" {...guard(onContinue, 'lp-button lp-button--primary')}>
           繼續
         </button>
       </div>

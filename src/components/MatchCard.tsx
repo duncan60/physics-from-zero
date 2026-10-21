@@ -133,7 +133,7 @@ export function MatchCard(props: {
       </div>
       {done && (
         <div className="lp-actions">
-          <button ref={continueRef} type="button" className="lp-button lp-button--primary" onClick={guard(() => onFinish(!hadWrong))}>
+          <button ref={continueRef} type="button" {...guard(() => onFinish(!hadWrong), 'lp-button lp-button--primary')}>
             繼續
           </button>
         </div>

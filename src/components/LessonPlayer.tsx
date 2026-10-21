@@ -11,6 +11,7 @@ import { ReportLink } from './ReportLink';
 import { useSound } from './SoundContext';
 import { ConceptView } from './steps/ConceptView';
 import { useActionGuard } from './useActionGuard';
+import type { Guard } from './useActionGuard';
 import { useReducedMotion } from './useReducedMotion';
 
 /** 上完一課的成績：完成畫面出現時交給 `onComplete`。 */
@@ -83,7 +84,7 @@ function SimView(props: { step: SimStep; onContinue: () => void }): React.JSX.El
       <p className="lp-sim-prompt">{step.prompt}</p>
       {renderSim(step.sim)}
       <div className="lp-actions">
-        <button type="button" className="lp-button lp-button--primary" onClick={guard(onContinue)}>
+        <button type="button" {...guard(onContinue, 'lp-button lp-button--primary')}>
           繼續
         </button>
       </div>
@@ -121,10 +122,10 @@ function ExitConfirm(props: { onStay: () => void; onLeave: () => void }): React.
       </p>
       <div className="lp-actions">
         {/* 預設焦點在比較安全的「繼續上課」 */}
-        <button ref={focusOnMount} type="button" className="lp-button lp-button--primary" onClick={guard(onStay)}>
+        <button ref={focusOnMount} type="button" {...guard(onStay, 'lp-button lp-button--primary')}>
           繼續上課
         </button>
-        <button type="button" className="lp-button lp-button--secondary" onClick={guard(onLeave)}>
+        <button type="button" {...guard(onLeave, 'lp-button lp-button--secondary')}>
           確定離開
         </button>
       </div>
@@ -143,7 +144,7 @@ function CompleteView(props: {
   isReview: boolean;
   onExit: () => void;
   onShowStationSummary?: () => void;
-  guard: (action: () => void) => () => void;
+  guard: Guard;
 }): React.JSX.Element {
   const { lesson, result, isReview, onExit, onShowStationSummary, guard } = props;
   const reducedMotion = useReducedMotion();
@@ -160,15 +161,11 @@ function CompleteView(props: {
         </ul>
         <div className="lp-actions">
           {onShowStationSummary !== undefined && (
-            <button type="button" className="lp-button lp-button--primary" onClick={guard(onShowStationSummary)}>
+            <button type="button" {...guard(onShowStationSummary, 'lp-button lp-button--primary')}>
               看本站重點
             </button>
           )}
-          <button
-            type="button"
-            className={onShowStationSummary === undefined ? 'lp-button lp-button--primary' : 'lp-button'}
-            onClick={guard(onExit)}
-          >
+          <button type="button" {...guard(onExit, onShowStationSummary === undefined ? 'lp-button lp-button--primary' : 'lp-button')}>
             回到地圖
           </button>
         </div>
