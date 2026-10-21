@@ -9,6 +9,7 @@ import { formulaTiles } from './lib/formula';
 import { emptyStats, lessonXp, recordQuestion } from './lib/game';
 import { PERFECT_BONUS_XP, STORAGE_KEY, XP_PER_FIRST_TRY, XP_PER_LESSON, emptyProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
+import { RUNS_KEY, loadRun } from './lib/runs';
 import type { Lesson, StationReview, Step } from './lib/types';
 
 // 用真實的課程，透過真的 App 和真的上課畫面（不換掉 LessonPlayer）把課上完；每站的複習也一樣。
@@ -379,4 +380,101 @@ it('App：拿到完美後，地圖上那一課變成「完美」，XP 包含完�
   await user.click(button('回到地圖'));
   expect(storedProgress()).toMatchObject({ perfect: [first.id] });
   expect(lessonLink(first)).toHaveTextContent('完美');
+});
+
+// ---- 課內存檔：重新整理、或「離開」後再打開，從上次那一步繼續（課程和複習都一樣） ----
+
+/** 每一步都一次答對時，這一課的 XP（lib/game 的規則）。 */
+function cleanXp(lesson: Lesson): number {
+  let stats = emptyStats();
+  for (const step of lesson.steps) if (isQuestion(step)) stats = recordQuestion(stats, true);
+  return lessonXp(stats);
+}
+
+/** 從第 from 步（從 0 算起）做到 to 之前，每一步都一次答對。 */
+async function playRange(user: User, lesson: Lesson, from: number, to: number): Promise<void> {
+  for (let index = from; index < to; index += 1) {
+    expect(screen.getByRole('progressbar', { name: '課程進度' }), `${lesson.id} 第 ${index + 1} 步`).toHaveAttribute('aria-valuenow', String(index));
+    await playStep(user, lesson.steps[index]);
+  }
+}
+
+it('上課上到一半重新整理：從那一步繼續；做完的 XP、完美和一次做完的一樣，存檔清掉，一般進度的格式不變', async () => {
+  const [first] = lessons;
+  const stop = Math.min(3, first.steps.length - 1);
+  const user = setupUser();
+  const page = render(<App />);
+  await user.click(lessonLink(first));
+  expect(screen.queryByText(/^從上次的第 \d+ 步繼續$/)).not.toBeInTheDocument();
+  await playRange(user, first, 0, stop);
+  expect(window.location.hash).toBe(`#/lesson/${first.id}`);
+
+  // 重新整理：整個 App 重新掛載，網址還在這一課
+  page.unmount();
+  render(<App />);
+  expect(screen.getByRole('progressbar', { name: '課程進度' })).toHaveAttribute('aria-valuenow', String(stop));
+  expect(screen.getByText(`從上次的第 ${stop + 1} 步繼續`)).toBeInTheDocument();
+  expect(button('從頭開始')).toBeInTheDocument();
+  await playRange(user, first, stop, first.steps.length);
+
+  expect(screen.getByText('完美！')).toBeInTheDocument();
+  expect(screen.getByText(`本課獲得 ${cleanXp(first)} XP`)).toBeInTheDocument();
+  expect(storedProgress()).toEqual({ version: 2, completed: [first.id], perfect: [first.id], xp: cleanXp(first), streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
+  expect(window.localStorage.getItem(RUNS_KEY)).toBeNull();
+});
+
+it('「離開」不再確認：直接回到地圖；從地圖再打開同一課，回到離開時的那一步；「從頭開始」回到第 1 步', async () => {
+  const [first] = lessons;
+  const user = setupUser();
+  render(<App />);
+  await user.click(lessonLink(first));
+  await playRange(user, first, 0, 2);
+  await user.click(button('離開'));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(window.location.hash).toBe('#/');
+  expect(storedProgress()).toBeNull(); // 還沒上完，一般進度不動
+
+  await user.click(lessonLink(first));
+  expect(screen.getByRole('progressbar', { name: '課程進度' })).toHaveAttribute('aria-valuenow', '2');
+  expect(screen.getByText('從上次的第 3 步繼續')).toBeInTheDocument();
+
+  await user.click(button('從頭開始'));
+  expect(screen.getByRole('progressbar', { name: '課程進度' })).toHaveAttribute('aria-valuenow', '0');
+  expect(screen.queryByText(/^從上次的第 \d+ 步繼續$/)).not.toBeInTheDocument();
+  expect(loadRun(window.localStorage, first.id, first.steps.length)).toBeNull();
+});
+
+it('複習（review-站號）也能續做：重新整理後從那一步繼續，做完照常記進度', async () => {
+  const [review] = reviews;
+  const lesson = reviewAsLesson(review);
+  const stationLessons = stations.find((s) => s.id === review.stationId)?.lessons.map((l) => l.id) ?? [];
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...emptyProgress(), completed: stationLessons, xp: 100, streak: 1, lastActiveDay: localDayKey(new Date()) }));
+  window.location.hash = `#/lesson/${lesson.id}`;
+  const user = setupUser();
+  const page = render(<App />);
+  await playRange(user, lesson, 0, 2);
+
+  page.unmount();
+  render(<App />);
+  expect(screen.getByText('從上次的第 3 步繼續')).toBeInTheDocument();
+  await playRange(user, lesson, 2, lesson.steps.length);
+  expect(screen.getByRole('heading', { name: '完成複習' })).toBeInTheDocument();
+  expect(screen.getByText(`本次複習獲得 ${cleanXp(lesson)} XP`)).toBeInTheDocument();
+  expect(storedProgress()).toMatchObject({ completed: [...stationLessons, lesson.id], perfect: [lesson.id], xp: 100 + cleanXp(lesson) });
+  expect(window.localStorage.getItem(RUNS_KEY)).toBeNull();
+});
+
+it('localStorage 不能用時照常上課（沒有存檔，也沒有「從上次…」）', async () => {
+  vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+    throw new DOMException('The operation is insecure.', 'SecurityError');
+  });
+  const [first] = lessons;
+  const user = setupUser();
+  const page = render(<App />);
+  await user.click(lessonLink(first));
+  await playRange(user, first, 0, 2);
+  page.unmount();
+  render(<App />);
+  expect(screen.getByRole('progressbar', { name: '課程進度' })).toHaveAttribute('aria-valuenow', '0');
+  expect(screen.queryByText(/^從上次的第 \d+ 步繼續$/)).not.toBeInTheDocument();
 });

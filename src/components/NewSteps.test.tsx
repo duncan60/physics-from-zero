@@ -808,15 +808,30 @@ it('LessonPlayer：拼算式第 2 步答錯 → 一步一步來 → 回到原題
   expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 15, perfect: false, accuracy: 50 }));
 });
 
-it('LessonPlayer：配對配過一次之後按「離開」，要先確認', async () => {
+it('LessonPlayer：配對配錯一次之後按「離開」：直接離開；再打開時這一題重新配，但不算一次答對', async () => {
+  window.localStorage.clear();
   const user = setupUser();
+  const lesson: Lesson = { id: 'test-match', title: '測試配對', steps: [matchStep] };
   const onExit = vi.fn();
-  render(<LessonPlayer lesson={{ id: 'test-match', title: '測試配對', steps: [matchStep] }} onComplete={vi.fn()} onExit={onExit} />);
+  const first = render(<LessonPlayer lesson={lesson} onComplete={vi.fn()} onExit={onExit} runStorage={window.localStorage} />);
   await user.click(button('平均速度'));
   await user.click(button('平均速度 × 時間'));
   await user.click(button('離開'));
-  expect(screen.getByRole('alertdialog', { name: '要離開這一課嗎？' })).toBeInTheDocument();
-  expect(onExit).not.toHaveBeenCalled();
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(onExit).toHaveBeenCalledTimes(1);
+  first.unmount();
+
+  const onComplete = vi.fn();
+  render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={vi.fn()} runStorage={window.localStorage} />);
+  expect(screen.getByText('從上次的第 1 步繼續')).toBeInTheDocument();
+  for (const pair of matchStep.pairs) {
+    await user.click(button(pair.left));
+    await user.click(button(pair.right));
+  }
+  await user.click(button('繼續'));
+  // 配錯過：和一次做完一樣，只有基本的 10 XP
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 10, perfect: false, accuracy: 0 }));
+  window.localStorage.clear();
 });
 
 // ---- 算對、但寫法省略了什麼（acceptedNotes）：在算式下面輕輕提醒正式寫法。

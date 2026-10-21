@@ -175,7 +175,8 @@ export default function App(): React.JSX.Element {
 
   /**
    * 本機預覽頁（只在開發模式，見下面 renderPage 的 import.meta.env.DEV）：從任何一課（或複習）的任何一步開始上課。
-   * 不檢查解鎖，不呼叫 saveProgress／completeLesson、不碰 localStorage，也沒有「回報問題」連結（不從 localhost 開 issue）；
+   * 不檢查解鎖，不呼叫 saveProgress／completeLesson、不碰 localStorage（不給 runStorage：課內存檔也不讀不寫），
+   * 也沒有「回報問題」連結（不從 localhost 開 issue）；
    * 完成畫面的「回到地圖」和中途「離開」都只回預覽頁。步驟編號從 1 算起，上課畫面的 startAt 從 0 算起。
    */
   function renderPreviewRun(lessonId: string, step: number): React.JSX.Element {
@@ -211,6 +212,7 @@ export default function App(): React.JSX.Element {
     }
     if (route.name !== 'lesson') return <PathMap progress={progress} onOpen={(next) => navigate(next)} />;
     // 一課，或某一站的複習（review-站號）：複習和課程一樣上課、存進度，只是解鎖規則不同（canOpenLesson 會處理）。
+    // 課內存檔（runStorage）也一樣：重新整理、或「離開」後再打開，從上次那一步繼續。儲存空間不能用時是 null，照常上課只是不存。
     const lesson = findLesson(route.id);
     if (lesson === undefined) return <Notice kind="missing" message="找不到這一課" onBack={backToMap} />;
     const isReview = reviewStationOf(lesson.id) !== undefined;
@@ -225,6 +227,7 @@ export default function App(): React.JSX.Element {
         onExit={backToMap}
         onShowStationSummary={stationSummaryAfter(lesson.id)}
         isReview={isReview}
+        runStorage={getStorage()}
       />
     );
   }

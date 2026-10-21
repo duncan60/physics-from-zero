@@ -5,6 +5,7 @@ import App from './App';
 import { reviewLessonId, reviewOf, stations } from './content/stations';
 import { STORAGE_KEY, emptyProgress } from './lib/progress';
 import type { Progress } from './lib/progress';
+import { RUNS_KEY, saveRun } from './lib/runs';
 
 // 本機預覽頁（只在開發模式有）：用真的 App 和真的上課畫面。Vitest 底下 import.meta.env.DEV 是 true；
 // 正式網站的行為用 vi.stubEnv('DEV', false) 模擬。
@@ -201,4 +202,31 @@ it('正式網站（DEV 是 false）：#/preview 和 #/preview/課程/步驟 都�
     expect(screen.queryByRole('progressbar'), hash).not.toBeInTheDocument(); // 沒有進入上課
     unmount();
   }
+});
+
+it('預覽不讀也不寫課內存檔：有存檔也從指定的那一步開始，沒有「從上次…」；做完也不清掉', async () => {
+  const lesson = lessons.find((l) => l.steps[l.steps.length - 1].kind === 'concept');
+  if (lesson === undefined) throw new Error('找不到最後一步是觀念卡的課');
+  saveRun(window.localStorage, { lessonId: lesson.id, nextStep: 2, stepCount: lesson.steps.length, stepMissed: false, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 }, elapsedMs: 0 });
+  const before = window.localStorage.getItem(RUNS_KEY);
+  const getItem = vi.spyOn(Storage.prototype, 'getItem');
+  const setItem = vi.spyOn(Storage.prototype, 'setItem');
+  const removeItem = vi.spyOn(Storage.prototype, 'removeItem');
+
+  window.location.hash = `#/preview/${lesson.id}/1`;
+  const { unmount } = render(<App />);
+  expect(currentIndex()).toBe(0);
+  expect(screen.queryByText(/^從上次的第 \d+ 步繼續$/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '從頭開始' })).not.toBeInTheDocument();
+  unmount();
+
+  window.location.hash = `#/preview/${lesson.id}/${lesson.steps.length}`;
+  render(<App />);
+  await setupUser().click(button('繼續'));
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+
+  expect(getItem.mock.calls.filter(([key]) => key === RUNS_KEY)).toHaveLength(0);
+  expect(setItem).not.toHaveBeenCalled();
+  expect(removeItem).not.toHaveBeenCalled();
+  expect(window.localStorage.getItem(RUNS_KEY)).toBe(before);
 });
