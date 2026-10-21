@@ -441,7 +441,7 @@ it('「離開」不再確認：直接回到地圖；從地圖再打開同一課�
   await user.click(button('從頭開始'));
   expect(screen.getByRole('progressbar', { name: '課程進度' })).toHaveAttribute('aria-valuenow', '0');
   expect(screen.queryByText(/^從上次的第 \d+ 步繼續$/)).not.toBeInTheDocument();
-  expect(loadRun(window.localStorage, first.id, first.steps.length)).toBeNull();
+  expect(loadRun(window.localStorage, first.id, first.steps.map((s) => s.id))).toBeNull();
 });
 
 it('複習（review-站號）也能續做：重新整理後從那一步繼續，做完照常記進度', async () => {

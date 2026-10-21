@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import type { ReactNode } from 'react';
@@ -1518,6 +1518,8 @@ it('引導走完一次之後答對：這一題仍然不算一次答對；下一�
 // 「重新整理」用卸載再掛載一次 LessonPlayer 模擬（存檔在 localStorage 裡，畫面上的狀態全部不見）。
 
 const resumeLine = (step: number) => `從上次的第 ${step} 步繼續`;
+/** 一課每一步的 id，依順序（loadRun 用來確認課程沒有改過）。 */
+const stepIds = (lesson: Lesson) => lesson.steps.map((s) => s.id);
 const queryResumeLine = () => screen.queryByText(/^從上次的第 \d+ 步繼續$/);
 
 /** comboLesson 的第 n 題（n + n）：一次答對；`miss` 時先答錯、看解答再繼續。 */
@@ -1682,7 +1684,7 @@ it('「從頭開始」：清掉存檔、回到第 1 步，作答統計也重新�
   expect(screen.getByText('這是一張觀念卡。')).toBeInTheDocument();
   expect(queryResumeLine()).not.toBeInTheDocument();
   expect(queryButton('從頭開始')).not.toBeInTheDocument();
-  expect(loadRun(window.localStorage, guidedLesson.id, guidedLesson.steps.length)).toBeNull();
+  expect(loadRun(window.localStorage, guidedLesson.id, stepIds(guidedLesson))).toBeNull();
   // 按下的按鈕不見了，焦點移到第一步
   expect(screen.getByText('這是一張觀念卡。').closest('.lp-stage')).toHaveFocus();
 
@@ -1705,7 +1707,7 @@ it('「從頭開始」：清掉存檔、回到第 1 步，作答統計也重新�
 });
 
 it('「從頭開始」剛出現時防連點：從地圖點進來的第二下不會按到', async () => {
-  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 });
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, nextStepId: 'count', stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 });
   const { fast } = renderPlayer(guidedLesson, { runStorage: window.localStorage });
   await fast.click(button('從頭開始'));
   expect(progressNow()).toBe(2);
@@ -1716,7 +1718,7 @@ it('「從頭開始」剛出現時防連點：從地圖點進來的第二下不�
 });
 
 it('進到下一步後，「從上次的第 N 步繼續」就收起來；之後每一步照樣存檔', async () => {
-  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 1, stepCount: 3, stepMissed: false, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 }, elapsedMs: 0 });
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 1, nextStepId: 'pick', stepCount: 3, stepMissed: false, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 }, elapsedMs: 0 });
   const { user } = renderPlayer(guidedLesson, { runStorage: window.localStorage });
   expect(screen.getByText(resumeLine(2))).toBeInTheDocument();
   await user.click(screen.getByRole('radio', { name: '選項 C' }));
@@ -1725,7 +1727,7 @@ it('進到下一步後，「從上次的第 N 步繼續」就收起來；之後�
   await user.click(button('繼續'));
   expect(queryResumeLine()).not.toBeInTheDocument();
   expect(queryButton('從頭開始')).not.toBeInTheDocument();
-  expect(loadRun(window.localStorage, guidedLesson.id, 3)).toMatchObject({ nextStep: 2, stepMissed: false, stats: { questions: 1, clean: 1 } });
+  expect(loadRun(window.localStorage, guidedLesson.id, stepIds(guidedLesson))).toMatchObject({ nextStep: 2, stepMissed: false, stats: { questions: 1, clean: 1 } });
 });
 
 it('上完這一課就清掉存檔：再打開從第 1 步開始', async () => {
@@ -1733,12 +1735,12 @@ it('上完這一課就清掉存檔：再打開從第 1 步開始', async () => {
   await first.user.click(screen.getByRole('radio', { name: '選項 A' }));
   await first.user.click(button('檢查'));
   await first.user.click(button('繼續'));
-  expect(loadRun(window.localStorage, plainLesson.id, 2)).toMatchObject({ nextStep: 1 });
+  expect(loadRun(window.localStorage, plainLesson.id, stepIds(plainLesson))).toMatchObject({ nextStep: 1 });
   await first.user.type(textbox('3 減 0 是多少？'), '3');
   await first.user.click(button('檢查'));
   await first.user.click(button('繼續'));
   expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
-  expect(loadRun(window.localStorage, plainLesson.id, 2)).toBeNull();
+  expect(loadRun(window.localStorage, plainLesson.id, stepIds(plainLesson))).toBeNull();
   expect(window.localStorage.getItem(RUNS_KEY)).toBeNull();
   first.unmount();
 
@@ -1748,13 +1750,14 @@ it('上完這一課就清掉存檔：再打開從第 1 步開始', async () => {
 });
 
 it('存檔壞掉、版本不符、步數超出範圍或課程改過：從第 1 步開始，不顯示「從上次…」，也不會壞掉', async () => {
-  const valid = { lessonId: guidedLesson.id, nextStep: 2, stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 };
+  const valid = { lessonId: guidedLesson.id, nextStep: 2, nextStepId: 'count', stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 };
   for (const raw of [
     '{not json',
     JSON.stringify({ version: 99, runs: { [guidedLesson.id]: valid } }),
     JSON.stringify({ version: 1, runs: { [guidedLesson.id]: { ...valid, nextStep: 3 } } }),
     JSON.stringify({ version: 1, runs: { [guidedLesson.id]: { ...valid, nextStep: 99 } } }),
     JSON.stringify({ version: 1, runs: { [guidedLesson.id]: { ...valid, stepCount: 5 } } }),
+    JSON.stringify({ version: 1, runs: { [guidedLesson.id]: { ...valid, nextStepId: 'pick' } } }),
     JSON.stringify({ version: 1, runs: { [guidedLesson.id]: { ...valid, stats: 'oops' } } }),
   ]) {
     window.localStorage.setItem(RUNS_KEY, raw);
@@ -1764,13 +1767,13 @@ it('存檔壞掉、版本不符、步數超出範圍或課程改過：從第 1 �
     expect(queryResumeLine(), raw).not.toBeInTheDocument();
     // 進到下一步時存一份新的、正確的
     await user.click(button('繼續'));
-    expect(loadRun(window.localStorage, guidedLesson.id, 3), raw).toMatchObject({ nextStep: 1 });
+    expect(loadRun(window.localStorage, guidedLesson.id, stepIds(guidedLesson)), raw).toMatchObject({ nextStep: 1 });
     unmount();
   }
 });
 
 it('沒給 runStorage（本機預覽）：不讀也不寫存檔', async () => {
-  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 });
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, nextStepId: 'count', stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 });
   const before = window.localStorage.getItem(RUNS_KEY);
   const getItem = vi.spyOn(Storage.prototype, 'getItem');
   const setItem = vi.spyOn(Storage.prototype, 'setItem');
@@ -1844,8 +1847,8 @@ it('StrictMode 底下也一樣：從存檔繼續、做完只回報一次、清�
 
 it('換了一課：讀那一課自己的存檔；在別一課按過「從頭開始」也一樣', async () => {
   const stats = { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 };
-  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, stepCount: 3, stepMissed: false, stats, elapsedMs: 0 });
-  saveRun(window.localStorage, { lessonId: plainLesson.id, nextStep: 1, stepCount: 2, stepMissed: false, stats, elapsedMs: 0 });
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, nextStepId: 'count', stepCount: 3, stepMissed: false, stats, elapsedMs: 0 });
+  saveRun(window.localStorage, { lessonId: plainLesson.id, nextStep: 1, nextStepId: 'q2', stepCount: 2, stepMissed: false, stats, elapsedMs: 0 });
   const onComplete = vi.fn();
   const onExit = vi.fn();
   const { rerender } = render(<LessonPlayer lesson={guidedLesson} onComplete={onComplete} onExit={onExit} runStorage={window.localStorage} />);
@@ -1863,4 +1866,145 @@ it('換了一課：讀那一課自己的存檔；在別一課按過「從頭開�
   rerender(<LessonPlayer lesson={guidedLesson} onComplete={onComplete} onExit={onExit} runStorage={window.localStorage} />);
   expect(progressNow()).toBe(0);
   expect(queryResumeLine()).not.toBeInTheDocument();
+});
+
+it('在 A 課按過「從頭開始」、換到 B 課再回到 A 課：A 課在那之後存的新存檔照樣讀得到', async () => {
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, nextStepId: 'count', stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 });
+  const onComplete = vi.fn();
+  const onExit = vi.fn();
+  const fast = userEvent.setup({ delay: null });
+  const { rerender } = render(<LessonPlayer lesson={guidedLesson} onComplete={onComplete} onExit={onExit} runStorage={window.localStorage} />);
+  settle();
+  await fast.click(button('從頭開始'));
+  expect(progressNow()).toBe(0);
+  // 從頭開始之後又往前走了一步：存了一份新的存檔
+  settle();
+  await fast.click(button('繼續'));
+  expect(progressNow()).toBe(1);
+  expect(loadRun(window.localStorage, guidedLesson.id, stepIds(guidedLesson))).toMatchObject({ nextStep: 1 });
+
+  // 同一個上課畫面換到 B 課，再回到 A 課
+  rerender(<LessonPlayer lesson={plainLesson} onComplete={onComplete} onExit={onExit} runStorage={window.localStorage} />);
+  expect(progressNow()).toBe(0);
+  rerender(<LessonPlayer lesson={guidedLesson} onComplete={onComplete} onExit={onExit} runStorage={window.localStorage} />);
+  expect(progressNow()).toBe(1);
+  expect(screen.getByText(resumeLine(2))).toBeInTheDocument();
+});
+
+it('課程改過：步數一樣、但步驟換了順序（存檔的下一步 id 對不上）：從第 1 步開始，不顯示「從上次…」', () => {
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 2, nextStepId: 'count', stepCount: 3, stepMissed: false, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 }, elapsedMs: 0 });
+  const [intro, pick, count] = guidedLesson.steps;
+  const reordered: Lesson = { ...guidedLesson, steps: [intro, count, pick] };
+  renderPlayer(reordered, { runStorage: window.localStorage });
+  expect(progressNow()).toBe(0);
+  expect(screen.getByText('這是一張觀念卡。')).toBeInTheDocument();
+  expect(queryResumeLine()).not.toBeInTheDocument();
+});
+
+it('從存檔接著做時，焦點所在的這一步用 aria-describedby 指向「從上次的第 N 步繼續」，螢幕閱讀器念得到；進到下一步就拿掉', async () => {
+  saveRun(window.localStorage, { lessonId: guidedLesson.id, nextStep: 1, nextStepId: 'pick', stepCount: 3, stepMissed: false, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 }, elapsedMs: 0 });
+  const { user } = renderPlayer(guidedLesson, { runStorage: window.localStorage });
+  const stage = () => document.querySelector<HTMLElement>('.lp-stage');
+  expect(stage()).toHaveFocus();
+  expect(stage()).toHaveAccessibleDescription(resumeLine(2));
+
+  await user.click(screen.getByRole('radio', { name: '選項 C' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(queryResumeLine()).not.toBeInTheDocument();
+  expect(stage()).toHaveFocus();
+  expect(stage()).not.toHaveAttribute('aria-describedby');
+});
+
+// ---- 存不進去時，「離開」先確認（存得進去時直接離開） ----
+
+const LEAVE_TITLE = '要離開這一課嗎？';
+const LEAVE_TEXT = '離開後，這一課要從頭開始。';
+
+it('儲存空間不能用（runStorage 是 null）、但還沒有任何進度：按「離開」直接離開', async () => {
+  const { user, onExit } = renderPlayer(guidedLesson, { runStorage: null });
+  await user.click(button('離開'));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(onExit).toHaveBeenCalledTimes(1);
+});
+
+it('儲存空間不能用（runStorage 是 null）：有進度之後按「離開」先確認；「繼續上課」回到原本的地方，「確定離開」才離開', async () => {
+  const { user, onComplete, onExit } = renderPlayer(guidedLesson, { runStorage: null });
+  await user.click(button('繼續'));
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeVisible();
+
+  await user.click(button('離開'));
+  expect(onExit).not.toHaveBeenCalled();
+  const dialog = screen.getByRole('alertdialog', { name: LEAVE_TITLE });
+  expect(dialog).toHaveAccessibleDescription(LEAVE_TEXT);
+  expect(within(dialog).getByRole('button', { name: '繼續上課' })).toHaveFocus(); // 預設是比較安全的那一個
+  expect(screen.getByText('還不對')).not.toBeVisible(); // 題目先收起來，畫面上只有這個問題
+
+  // 再按一次「離開」不會就這樣離開
+  await user.click(button('離開'));
+  expect(onExit).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+
+  await user.click(button('繼續上課'));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(screen.getByText('還不對')).toBeVisible();
+  expect(screen.getByText('最後一步再看一次')).toBeVisible();
+  expect(button('離開')).toHaveFocus(); // 焦點回到按下去的按鈕
+
+  await user.click(button('離開'));
+  await user.click(button('確定離開'));
+  expect(onExit).toHaveBeenCalledTimes(1);
+  expect(onComplete).not.toHaveBeenCalled();
+});
+
+it('存不進去（setItem 拋出例外）：按「離開」先確認；連點不會按到「確定離開」；按 Esc 等於「繼續上課」', async () => {
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('quota', 'QuotaExceededError');
+  });
+  const { user, fast, onExit } = renderPlayer(plainLesson, { runStorage: window.localStorage });
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(progressNow()).toBe(1);
+  settle();
+
+  await fast.click(button('離開'));
+  await fast.click(button('確定離開'));
+  expect(onExit).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog', { name: LEAVE_TITLE })).toBeInTheDocument();
+
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(button('離開')).toHaveFocus();
+  expect(onExit).not.toHaveBeenCalled();
+
+  await user.click(button('離開'));
+  await user.click(button('確定離開'));
+  expect(onExit).toHaveBeenCalledTimes(1);
+});
+
+it('存得進去時「離開」直接離開；這次存不進去才先確認，之後又存進去了就不再確認', async () => {
+  const setItem = vi.spyOn(Storage.prototype, 'setItem');
+  const { user, onExit } = renderPlayer(comboLesson, { runStorage: window.localStorage });
+  await answerDouble(user, 1);
+  await user.click(button('離開'));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(onExit).toHaveBeenCalledTimes(1);
+
+  setItem.mockImplementationOnce(() => {
+    throw new DOMException('quota', 'QuotaExceededError');
+  });
+  await answerDouble(user, 2);
+  await user.click(button('離開'));
+  expect(screen.getByRole('alertdialog', { name: LEAVE_TITLE })).toBeInTheDocument();
+  expect(onExit).toHaveBeenCalledTimes(1);
+  await user.click(button('繼續上課'));
+
+  await answerDouble(user, 3);
+  expect(loadRun(window.localStorage, comboLesson.id, stepIds(comboLesson))).toMatchObject({ nextStep: 3 });
+  await user.click(button('離開'));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(onExit).toHaveBeenCalledTimes(2);
 });

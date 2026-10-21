@@ -33,7 +33,10 @@ interface Props {
    * 看到完成畫面後直接按上一頁、用返回手勢或關掉分頁，這一課也已經算完成。
    */
   onComplete: (result: LessonResult) => void;
-  /** 中途按「離開」（直接離開，不再確認：有 runStorage 時做到哪一步已經存起來了），或在完成畫面按「回到地圖」。 */
+  /**
+   * 中途按「離開」，或在完成畫面按「回到地圖」。中途離開平常不再確認（做到哪一步已經存起來了）；
+   * 只有存檔存不進去（runStorage 是 null，或最近一次存檔失敗）而且已經有進度時，要在確認時按「確定離開」。
+   */
   onExit: () => void;
   /**
    * 有給的話，完成畫面多一個「看本站重點」（主要按鈕，排在「回到地圖」前面），按了呼叫這裡。
@@ -55,7 +58,8 @@ interface Props {
    * 課內存檔放在哪裡（lib/runs；App 傳 getStorage()）。有給的話：每按「繼續」進到下一步就存一次
    * （一題第一次答錯時也存，回來重做這一題仍然不算一次答對）；打開時有這一課的存檔就從那一步接著做，
    * 上方顯示「從上次的第 N 步繼續」和「從頭開始」；上完時清掉。
-   * 沒給（本機預覽）就完全不讀也不寫；null（儲存空間不能用）照常上課，只是不存。
+   * 沒給（本機預覽）就完全不讀也不寫；null（儲存空間不能用）照常上課，只是不存，有進度之後按「離開」要先確認。
+   * 存檔時存不進去（空間滿了、被封鎖）也一樣：最近一次存檔失敗時，「離開」先確認；之後又存成功了就不再確認。
    * 有存檔時從存檔那一步開始，不看 startAt（startAt 是預覽頁用的，預覽不給 runStorage）。
    */
   runStorage?: Storage | null;
@@ -109,16 +113,58 @@ function SimView(props: { step: SimStep; onContinue: () => void }): React.JSX.El
 /**
  * 從存檔接著做時，上方的一行：「從上次的第 N 步繼續」和「從頭開始」（清掉存檔，從第 1 步、從 0 分重新開始）。
  * 從地圖點進來時「從頭開始」可能剛好在手指底下，剛出現的這段時間內按到的不算，連點不會把存檔清掉。
+ * `textId` 給那一行字：焦點所在的這一步用 aria-describedby 指向它，螢幕閱讀器才念得到。確認離開時和這一步一起藏起來。
  */
-function ResumeNotice(props: { step: number; onRestart: () => void }): React.JSX.Element {
+function ResumeNotice(props: { step: number; textId: string; hidden: boolean; onRestart: () => void }): React.JSX.Element {
   const guard = useActionGuard();
   return (
-    <div className="lp-resume">
-      <p className="lp-resume-text">{`從上次的第 ${props.step} 步繼續`}</p>
+    <div className="lp-resume" hidden={props.hidden}>
+      <p id={props.textId} className="lp-resume-text">{`從上次的第 ${props.step} 步繼續`}</p>
       <button type="button" {...guard(props.onRestart, 'lp-button lp-resume-restart')}>
         從頭開始
       </button>
     </div>
+  );
+}
+
+/**
+ * 存檔存不進去、又已經有進度時按「離開」，先問一次，避免誤觸就丟掉這一課做到一半的進度。
+ * 不用瀏覽器的 confirm()：樣式和網站一致，手機上也不會跳出系統對話框。按 Esc 等於「繼續上課」。
+ */
+function ExitConfirm(props: { onStay: () => void; onLeave: () => void }): React.JSX.Element {
+  const { onStay, onLeave } = props;
+  const titleId = useId();
+  const textId = useId();
+  // 剛出現的這段時間內按到的不算：連點「離開」的第二下不會變成「確定離開」。
+  const guard = useActionGuard();
+  return (
+    <section
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={textId}
+      className="lp-leave"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        onStay();
+      }}
+    >
+      <h2 id={titleId} className="lp-leave-title">
+        要離開這一課嗎？
+      </h2>
+      <p id={textId} className="lp-leave-text">
+        離開後，這一課要從頭開始。
+      </p>
+      <div className="lp-actions">
+        {/* 預設焦點在比較安全的「繼續上課」 */}
+        <button ref={focusOnMount} type="button" {...guard(onStay, 'lp-button lp-button--primary')}>
+          繼續上課
+        </button>
+        <button type="button" {...guard(onLeave, 'lp-button lp-button--secondary')}>
+          確定離開
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -169,15 +215,17 @@ function CompleteView(props: {
  * 最後是完成畫面。每一題結束時用 lib/game 的 recordQuestion 記錄是不是一次答對（沒有答錯過、沒有用引導、沒有看解答）；
  * 觀念卡和動畫不算題目。XP、完美、正確率都由這份統計算出來。
  * 引導：第一次答錯時主要按鈕是「一步一步來」；同一題的引導走完一次之後再答錯，改成「再試一次」，旁邊有「再看一次引導」和「看解答」。
- * 課內存檔（有 runStorage 時）：見 Props 的 runStorage。「離開」不再確認，直接離開。
+ * 課內存檔（有 runStorage 時）：見 Props 的 runStorage。「離開」平常直接離開；存檔存不進去、又已經有進度時先確認。
  * 音效（有 SoundProvider 而且開著時）：答對 correct、答錯 wrong、完成畫面出現 complete，都在使用者按下按鈕的當下播放。
  */
 export function LessonPlayer(props: Props): React.JSX.Element {
   // 換了一課（或換了從哪一步開始）就整個重新開始，不會把上一課的進度帶過來。
   const runKey = `${props.lesson.id}:${props.startAt ?? 0}`;
   // 在這一課按「從頭開始」的次數：每按一次就用新的 key 重新掛載，所有狀態（步驟、統計、時間）都從頭來，也不再讀存檔
-  // （就算清不掉存檔也一樣）。記著是哪一課按的：同一個上課畫面換了一課（例如用上一頁直接回到另一課），那一課照樣讀它的存檔。
+  // （就算清不掉存檔也一樣）。換了一課（例如用上一頁直接回到另一課）就歸零：那一課照樣讀它的存檔，
+  // 之後再回到按過「從頭開始」的那一課，也會讀它在那之後存的新存檔。
   const [restarts, setRestarts] = useState({ runKey, count: 0 });
+  if (restarts.runKey !== runKey) setRestarts({ runKey, count: 0 });
   const count = restarts.runKey === runKey ? restarts.count : 0;
   return (
     <LessonRun
@@ -204,7 +252,7 @@ function LessonRun({
 }: RunProps): React.JSX.Element {
   const total = lesson.steps.length;
   // 這一課的存檔（沒給 runStorage 就不讀）。壞掉、版本不符、課程改過都是 null，從頭開始。
-  const [saved] = useState(() => (resume && runStorage !== undefined ? loadRun(runStorage, lesson.id, total) : null));
+  const [saved] = useState(() => (resume && runStorage !== undefined ? loadRun(runStorage, lesson.id, lesson.steps.map((s) => s.id)) : null));
   const [index, setIndex] = useState(() => saved?.nextStep ?? firstIndex(startAt, total));
   const [inGuide, setInGuide] = useState(false);
   // 每從引導回到原題一次就加一，讓原題用新的 key 重新掛載，重新作答。
@@ -227,7 +275,12 @@ function LessonRun({
   // 從存檔接著做時，往前推存檔時已經花掉的時間：離開的那段時間不算，重新整理後時鐘從 0 開始也沒關係。
   const [startedAt] = useState(() => now() - (saved?.elapsedMs ?? 0));
   const [endedAt, setEndedAt] = useState<number | null>(null);
+  // 最近一次存檔沒存成（runStorage 是 null，或寫入時拋出例外）：這時「離開」會丟掉進度，要先確認。之後又存成功就清掉。
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [confirmingExit, setConfirmingExit] = useState(false);
+  const exitRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const resumeTextId = useId();
   const reported = useRef(false);
   const play = useSound();
 
@@ -249,11 +302,16 @@ function LessonRun({
     onComplete({ xp, perfect, accuracy: percent, durationMs });
   }, [finished, xp, perfect, percent, durationMs, onComplete]);
 
-  /** 存這一課目前的位置（沒給 runStorage 就不存）：回來時從 nextStep 開始，帶著到這裡為止的統計和花掉的時間。 */
+  /**
+   * 存這一課目前的位置（沒給 runStorage 就不存）：回來時從 nextStep 開始，帶著到這裡為止的統計和花掉的時間。
+   * 記下這次有沒有存成，「離開」要不要先確認看的是最近一次的結果。
+   */
   function save(nextStep: number, nextStats: RunStats, stepMissed: boolean): void {
     if (runStorage === undefined) return;
     const elapsedMs = Math.max(0, now() - startedAt);
-    saveRun(runStorage, { lessonId: lesson.id, nextStep, stepCount: total, stepMissed, stats: nextStats, elapsedMs });
+    const nextStepId = lesson.steps[nextStep].id;
+    const ok = saveRun(runStorage, { lessonId: lesson.id, nextStep, nextStepId, stepCount: total, stepMissed, stats: nextStats, elapsedMs });
+    setSaveFailed(!ok);
   }
 
   // nextStats：這一步結束後的統計（題目由 finishQuestion 算好傳進來；觀念卡、動畫不變）。
@@ -313,6 +371,17 @@ function LessonRun({
     setAttempt((n) => n + 1);
   }
 
+  // 存檔存不進去、又已經有進度時，先問一次；確認中再按一次「離開」不會怎樣，連點兩下不會直接離開。
+  function requestExit(): void {
+    if (saveFailed) setConfirmingExit(true);
+    else onExit();
+  }
+
+  function stay(): void {
+    setConfirmingExit(false);
+    exitRef.current?.focus();
+  }
+
   // 「從頭開始」：清掉存檔，外層用新的 key 重新掛載（回到第 1 步，統計和時間都從 0 開始，焦點移到第一步）。
   function restart(): void {
     if (runStorage !== undefined) clearRun(runStorage, lesson.id);
@@ -334,9 +403,9 @@ function LessonRun({
   function renderStep(current: Step): React.JSX.Element {
     switch (current.kind) {
       case 'concept':
-        return <ConceptView step={current} onContinue={advance} />;
+        return <ConceptView step={current} onContinue={() => advance()} />;
       case 'sim':
-        return <SimView step={current} onContinue={advance} />;
+        return <SimView step={current} onContinue={() => advance()} />;
       case 'match':
         // 配對沒有引導、沒有看解答
         return <MatchCard step={current} onFinish={finishQuestion} onCheck={handleCheck} />;
@@ -371,7 +440,7 @@ function LessonRun({
   return (
     <section className="lp-player" aria-labelledby={titleId}>
       <div className="lp-topbar">
-        <button type="button" className="lp-button lp-exit" onClick={onExit}>
+        <button ref={exitRef} type="button" className="lp-button lp-exit" onClick={requestExit}>
           離開
         </button>
         <div className="lp-topbar-main">
@@ -400,8 +469,17 @@ function LessonRun({
           </div>
         </div>
       </div>
-      {resumedAt !== null && <ResumeNotice step={resumedAt + 1} onRestart={restart} />}
-      <div key={`${index}-${inGuide ? 'guide' : attempt}`} ref={focusOnMount} tabIndex={-1} className={bounce ? 'lp-stage lp-bounce' : 'lp-stage'}>
+      {confirmingExit && <ExitConfirm onStay={stay} onLeave={onExit} />}
+      {resumedAt !== null && <ResumeNotice step={resumedAt + 1} textId={resumeTextId} hidden={confirmingExit} onRestart={restart} />}
+      {/* 確認離開時只是先藏起來，不卸載：按「繼續上課」回來，作答到一半的狀態都還在。 */}
+      <div
+        key={`${index}-${inGuide ? 'guide' : attempt}`}
+        ref={focusOnMount}
+        tabIndex={-1}
+        className={bounce ? 'lp-stage lp-bounce' : 'lp-stage'}
+        aria-describedby={resumedAt !== null ? resumeTextId : undefined}
+        hidden={confirmingExit}
+      >
         {renderStep(step)}
         {/* 每一步卡片的下方都有「回報問題」；引導裡的步驟由 GuideRunner 放它自己的（用引導步驟自己的 id）。 */}
         {!inGuide && showReportLinks && <ReportLink lessonId={lesson.id} lessonTitle={lesson.title} stepId={step.id} stepKind={step.kind} />}

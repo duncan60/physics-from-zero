@@ -1339,6 +1339,28 @@ a.path-node:active .path-node-circle {
   }
 }
 
+/* ---- 確認離開（存檔存不進去時才會出現） ---- */
+
+.lp-leave {
+  padding: 20px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+}
+
+.lp-leave-title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.lp-leave-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+
 /* ---- 從上次那一步繼續（課內存檔）：上方固定列下面的一行，「從頭開始」在右邊；窄螢幕放不下就換行 ---- */
 
 .lp-resume {

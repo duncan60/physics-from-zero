@@ -18,6 +18,11 @@ export interface SavedRun {
   lessonId: string;
   /** 回來時從哪一步開始（從 0 算起）：按「繼續」進到下一步時是那一步；這一題答錯過時是這一題本身（見 stepMissed）。 */
   nextStep: number;
+  /**
+   * nextStep 那一步的 id。課程內容改過（步數一樣、但步驟換了順序或換了題目）時，原本的位置會指到別的步驟，
+   * 這時 id 對不上，從頭開始。
+   */
+  nextStepId: string;
   /** 存檔時這一課有幾步。課程內容改過（步數不一樣）時，原本的位置可能指到別的步驟，所以從頭開始。 */
   stepCount: number;
   /**
@@ -55,11 +60,13 @@ function parseStats(value: unknown): RunStats | null {
   return { questions, clean, combo, bestCombo, comboXp };
 }
 
-/** 驗證一課的存檔；任何一個欄位有問題、或和現在的課程對不上，就回傳 null。 */
-function parseRun(value: unknown, lessonId: string, stepCount: number): SavedRun | null {
+/** 驗證一課的存檔；任何一個欄位有問題、或和現在的課程對不上（步數、下一步的 id），就回傳 null。 */
+function parseRun(value: unknown, lessonId: string, stepIds: readonly string[]): SavedRun | null {
+  const stepCount = stepIds.length;
   if (!isRecord(value) || value.lessonId !== lessonId || value.stepCount !== stepCount) return null;
-  const { nextStep, stepMissed, elapsedMs } = value;
+  const { nextStep, nextStepId, stepMissed, elapsedMs } = value;
   if (!isCount(nextStep) || nextStep >= stepCount) return null;
+  if (typeof nextStepId !== 'string' || nextStepId !== stepIds[nextStep]) return null;
   if (typeof stepMissed !== 'boolean') return null;
   // 還在第一步、也沒答錯過：沒有什麼好接著做的（不會這樣存，讀到了也不顯示「從上次的第 1 步繼續」）。
   if (nextStep === 0 && !stepMissed) return null;
@@ -67,7 +74,7 @@ function parseRun(value: unknown, lessonId: string, stepCount: number): SavedRun
   const stats = parseStats(value.stats);
   // 做過的題目不會比走過的步驟多
   if (stats === null || stats.questions > nextStep) return null;
-  return { lessonId, nextStep, stepCount, stepMissed, stats, elapsedMs };
+  return { lessonId, nextStep, nextStepId, stepCount, stepMissed, stats, elapsedMs };
 }
 
 /**
@@ -93,28 +100,34 @@ function writeRuns(storage: Storage, runs: Record<string, unknown>): void {
 }
 
 /**
- * 這一課的存檔；沒有的話回傳 null。永遠不拋出例外：沒有 storage、讀不到、資料壞掉、版本不符、
- * nextStep 超出範圍或步數和現在的課程不一樣（課程改過），都回傳 null，從頭開始。
+ * 這一課的存檔；沒有的話回傳 null。`stepIds` 是現在這一課每一步的 id，依順序。
+ * 永遠不拋出例外：沒有 storage、讀不到、資料壞掉、版本不符、nextStep 超出範圍，
+ * 或課程改過（步數不一樣、nextStep 那一步的 id 不一樣），都回傳 null，從頭開始。
  */
-export function loadRun(storage: Storage | null, lessonId: string, stepCount: number): SavedRun | null {
+export function loadRun(storage: Storage | null, lessonId: string, stepIds: readonly string[]): SavedRun | null {
   if (!storage) return null;
   try {
     const runs = readRuns(storage);
-    return hasOwn(runs, lessonId) ? parseRun(runs[lessonId], lessonId, stepCount) : null;
+    return hasOwn(runs, lessonId) ? parseRun(runs[lessonId], lessonId, stepIds) : null;
   } catch {
     return null;
   }
 }
 
-/** 存這一課的存檔（取代這一課原本的，其他課的不動）。原本的檔案壞掉或版本不符時整個換掉。存不進去就算了，照常上課。 */
-export function saveRun(storage: Storage | null, run: SavedRun): void {
-  if (!storage) return;
+/**
+ * 存這一課的存檔（取代這一課原本的，其他課的不動）。原本的檔案壞掉或版本不符時整個換掉。
+ * 存成了回傳 true；沒有 storage（null）、或讀寫時拋出例外（空間滿了、被封鎖）回傳 false，不拋出例外。
+ * 存不進去照常上課，只是上課畫面的「離開」會先確認（離開後這一課要從頭開始）。
+ */
+export function saveRun(storage: Storage | null, run: SavedRun): boolean {
+  if (!storage) return false;
   try {
     const runs = readRuns(storage);
     runs[run.lessonId] = run;
     writeRuns(storage, runs);
+    return true;
   } catch {
-    // 忽略：只是這次存不下來
+    return false;
   }
 }
 

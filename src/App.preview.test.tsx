@@ -207,7 +207,7 @@ it('正式網站（DEV 是 false）：#/preview 和 #/preview/課程/步驟 都�
 it('預覽不讀也不寫課內存檔：有存檔也從指定的那一步開始，沒有「從上次…」；做完也不清掉', async () => {
   const lesson = lessons.find((l) => l.steps[l.steps.length - 1].kind === 'concept');
   if (lesson === undefined) throw new Error('找不到最後一步是觀念卡的課');
-  saveRun(window.localStorage, { lessonId: lesson.id, nextStep: 2, stepCount: lesson.steps.length, stepMissed: false, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 }, elapsedMs: 0 });
+  saveRun(window.localStorage, { lessonId: lesson.id, nextStep: 2, nextStepId: lesson.steps[2].id, stepCount: lesson.steps.length, stepMissed: false, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 }, elapsedMs: 0 });
   const before = window.localStorage.getItem(RUNS_KEY);
   const getItem = vi.spyOn(Storage.prototype, 'getItem');
   const setItem = vi.spyOn(Storage.prototype, 'setItem');

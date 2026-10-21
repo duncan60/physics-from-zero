@@ -9,9 +9,12 @@ import type { SavedRun } from './runs';
 
 const stats: RunStats = { questions: 2, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 };
 
-/** 1-1 共 8 步，做完前 3 步，下一步是第 4 步（索引 3）。 */
+/** 1-1 的 8 個步驟 id，依順序。 */
+const STEP_IDS = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7'];
+
+/** 1-1 共 8 步，做完前 3 步，下一步是第 4 步（索引 3，id 是 s3）。 */
 function run(overrides: Partial<SavedRun> = {}): SavedRun {
-  return { lessonId: '1-1', nextStep: 3, stepCount: 8, stepMissed: false, stats, elapsedMs: 42_000, ...overrides };
+  return { lessonId: '1-1', nextStep: 3, nextStepId: 's3', stepCount: 8, stepMissed: false, stats, elapsedMs: 42_000, ...overrides };
 }
 
 /** 直接寫進儲存空間的原始資料（模擬舊版、壞掉或被改過的存檔）。 */
@@ -33,7 +36,7 @@ afterEach(() => {
 describe('saveRun／loadRun', () => {
   it('存進去再讀出來一模一樣；存在自己的 key，不碰一般進度', () => {
     saveRun(window.localStorage, run());
-    expect(loadRun(window.localStorage, '1-1', 8)).toEqual(run());
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toEqual(run());
     expect(rawFile()).toEqual({ version: RUNS_VERSION, runs: { '1-1': run() } });
     expect(RUNS_KEY).toBe('physics-from-zero:runs');
     expect(RUNS_KEY).not.toBe(STORAGE_KEY);
@@ -42,32 +45,45 @@ describe('saveRun／loadRun', () => {
 
   it('每一課各有一份；同一課再存一次只取代那一課的', () => {
     saveRun(window.localStorage, run());
-    saveRun(window.localStorage, run({ lessonId: 'review-1', nextStep: 1, stepCount: 5, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 } }));
-    saveRun(window.localStorage, run({ nextStep: 5, stats: { questions: 3, clean: 3, combo: 3, bestCombo: 3, comboXp: 1 } }));
-    expect(loadRun(window.localStorage, '1-1', 8)).toMatchObject({ nextStep: 5, stats: { questions: 3, comboXp: 1 } });
-    expect(loadRun(window.localStorage, 'review-1', 5)).toMatchObject({ lessonId: 'review-1', nextStep: 1 });
+    saveRun(window.localStorage, run({ lessonId: 'review-1', nextStep: 1, nextStepId: 's1', stepCount: 5, stats: { questions: 1, clean: 1, combo: 1, bestCombo: 1, comboXp: 0 } }));
+    saveRun(window.localStorage, run({ nextStep: 5, nextStepId: 's5', stats: { questions: 3, clean: 3, combo: 3, bestCombo: 3, comboXp: 1 } }));
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toMatchObject({ nextStep: 5, stats: { questions: 3, comboXp: 1 } });
+    expect(loadRun(window.localStorage, 'review-1', STEP_IDS.slice(0, 5))).toMatchObject({ lessonId: 'review-1', nextStep: 1 });
   });
 
   it('沒存過、或存的是別一課：null', () => {
-    expect(loadRun(window.localStorage, '1-1', 8)).toBeNull();
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toBeNull();
     saveRun(window.localStorage, run());
-    expect(loadRun(window.localStorage, '1-2', 8)).toBeNull();
+    expect(loadRun(window.localStorage, '1-2', STEP_IDS)).toBeNull();
   });
 
   it('這一題答錯過（stepMissed）時，第一步也可以存：回來重做這一題，也不算一次答對', () => {
-    saveRun(window.localStorage, run({ nextStep: 0, stepMissed: true, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 } }));
-    expect(loadRun(window.localStorage, '1-1', 8)).toMatchObject({ nextStep: 0, stepMissed: true });
+    saveRun(window.localStorage, run({ nextStep: 0, nextStepId: 's0', stepMissed: true, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 } }));
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toMatchObject({ nextStep: 0, stepMissed: true });
   });
 
   it('不會被 Object 原型上的名字騙到', () => {
     saveRun(window.localStorage, run());
-    for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(loadRun(window.localStorage, id, 8), id).toBeNull();
+    for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(loadRun(window.localStorage, id, STEP_IDS), id).toBeNull();
   });
 
-  it('沒有 storage（null）：讀到 null，存和清都什麼都不做', () => {
-    expect(loadRun(null, '1-1', 8)).toBeNull();
-    expect(() => saveRun(null, run())).not.toThrow();
+  it('沒有 storage（null）：讀到 null，存和清都什麼都不做；saveRun 回報沒存成（false）', () => {
+    expect(loadRun(null, '1-1', STEP_IDS)).toBeNull();
+    expect(saveRun(null, run())).toBe(false);
     expect(() => clearRun(null, '1-1')).not.toThrow();
+  });
+
+  it('存成功時 saveRun 回傳 true', () => {
+    expect(saveRun(window.localStorage, run())).toBe(true);
+  });
+
+  it('課程改過：步數一樣、但步驟換了順序（下一步的 id 對不上）也從頭開始', () => {
+    saveRun(window.localStorage, run());
+    const reordered = ['s0', 's1', 's2', 's4', 's3', 's5', 's6', 's7'];
+    expect(reordered).toHaveLength(8);
+    expect(loadRun(window.localStorage, '1-1', reordered)).toBeNull();
+    // 換順序的是別的步驟（下一步還是 s3）：照樣接著做
+    expect(loadRun(window.localStorage, '1-1', ['s1', 's0', 's2', 's3', 's4', 's5', 's6', 's7'])).toEqual(run());
   });
 });
 
@@ -88,7 +104,10 @@ describe('loadRun：壞掉、版本不符、課程改過，一律當作沒有存
     ['nextStep 是小數', { version: RUNS_VERSION, runs: { '1-1': run({ nextStep: 2.5 }) } }],
     ['nextStep 是字串', { version: RUNS_VERSION, runs: { '1-1': { ...run(), nextStep: '3' } } }],
     ['課程改過：步數不一樣', { version: RUNS_VERSION, runs: { '1-1': run({ stepCount: 9 }) } }],
-    ['第一步、也沒答錯過：沒有什麼好接著做的', { version: RUNS_VERSION, runs: { '1-1': run({ nextStep: 0, stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 } }) } }],
+    ['課程改過：下一步的 id 不一樣', { version: RUNS_VERSION, runs: { '1-1': run({ nextStepId: 's4' }) } }],
+    ['沒有 nextStepId', { version: RUNS_VERSION, runs: { '1-1': { ...run(), nextStepId: undefined } } }],
+    ['nextStepId 不是字串', { version: RUNS_VERSION, runs: { '1-1': { ...run(), nextStepId: 3 } } }],
+    ['第一步、也沒答錯過：沒有什麼好接著做的', { version: RUNS_VERSION, runs: { '1-1': run({ nextStep: 0, nextStepId: 's0', stats: { questions: 0, clean: 0, combo: 0, bestCombo: 0, comboXp: 0 } }) } }],
     ['stepMissed 不是布林值', { version: RUNS_VERSION, runs: { '1-1': { ...run(), stepMissed: 'no' } } }],
     ['elapsedMs 是負數', { version: RUNS_VERSION, runs: { '1-1': run({ elapsedMs: -1 }) } }],
     ['elapsedMs 不是數字', { version: RUNS_VERSION, runs: { '1-1': { ...run(), elapsedMs: '42000' } } }],
@@ -101,14 +120,14 @@ describe('loadRun：壞掉、版本不符、課程改過，一律當作沒有存
     ['做過的題目比走過的步驟多', { version: RUNS_VERSION, runs: { '1-1': run({ stats: { questions: 4, clean: 4, combo: 4, bestCombo: 4, comboXp: 2 } }) } }],
     ['連續答對比一次答對的題數多', { version: RUNS_VERSION, runs: { '1-1': run({ stats: { ...stats, combo: 2, bestCombo: 2 } }) } }],
     ['最長連續答對比目前的連續答對短', { version: RUNS_VERSION, runs: { '1-1': run({ stats: { ...stats, bestCombo: 0 } }) } }],
-    ['Combo 加分超過上限', { version: RUNS_VERSION, runs: { '1-1': run({ nextStep: 7, stats: { questions: 7, clean: 7, combo: 7, bestCombo: 7, comboXp: COMBO_XP_CAP + 1 } }) } }],
+    ['Combo 加分超過上限', { version: RUNS_VERSION, runs: { '1-1': run({ nextStep: 7, nextStepId: 's7', stats: { questions: 7, clean: 7, combo: 7, bestCombo: 7, comboXp: COMBO_XP_CAP + 1 } }) } }],
   ];
 
   for (const [name, value] of broken) {
     it(name, () => {
       writeRaw(value);
-      expect(() => loadRun(window.localStorage, '1-1', 8)).not.toThrow();
-      expect(loadRun(window.localStorage, '1-1', 8)).toBeNull();
+      expect(() => loadRun(window.localStorage, '1-1', STEP_IDS)).not.toThrow();
+      expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toBeNull();
     });
   }
 
@@ -116,22 +135,23 @@ describe('loadRun：壞掉、版本不符、課程改過，一律當作沒有存
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
-    expect(loadRun(window.localStorage, '1-1', 8)).toBeNull();
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toBeNull();
   });
 
   it('同一個檔案裡別一課的存檔壞掉，不影響這一課', () => {
     writeRaw({ version: RUNS_VERSION, runs: { '1-1': run(), '1-2': 'oops' } });
-    expect(loadRun(window.localStorage, '1-1', 8)).toEqual(run());
-    expect(loadRun(window.localStorage, '1-2', 8)).toBeNull();
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toEqual(run());
+    expect(loadRun(window.localStorage, '1-2', STEP_IDS)).toBeNull();
   });
 });
 
-describe('saveRun：存不進去也不拋出例外', () => {
+describe('saveRun：存不進去也不拋出例外，回傳 false', () => {
   it('setItem 拋出例外（空間滿了）', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');
     });
     expect(() => saveRun(window.localStorage, run())).not.toThrow();
+    expect(saveRun(window.localStorage, run())).toBe(false);
   });
 
   it('getItem 拋出例外', () => {
@@ -139,6 +159,7 @@ describe('saveRun：存不進去也不拋出例外', () => {
       throw new DOMException('denied', 'SecurityError');
     });
     expect(() => saveRun(window.localStorage, run())).not.toThrow();
+    expect(saveRun(window.localStorage, run())).toBe(false);
   });
 
   it('原本的檔案壞掉或版本不符：換成只有這一課的新檔案', () => {
@@ -155,8 +176,8 @@ describe('clearRun', () => {
     saveRun(window.localStorage, run());
     saveRun(window.localStorage, run({ lessonId: '1-2' }));
     clearRun(window.localStorage, '1-1');
-    expect(loadRun(window.localStorage, '1-1', 8)).toBeNull();
-    expect(loadRun(window.localStorage, '1-2', 8)).toEqual(run({ lessonId: '1-2' }));
+    expect(loadRun(window.localStorage, '1-1', STEP_IDS)).toBeNull();
+    expect(loadRun(window.localStorage, '1-2', STEP_IDS)).toEqual(run({ lessonId: '1-2' }));
     clearRun(window.localStorage, '1-2');
     expect(window.localStorage.getItem(RUNS_KEY)).toBeNull();
   });
