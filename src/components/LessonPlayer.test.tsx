@@ -429,6 +429,36 @@ it('數字後面多打了單位：提示「只要填數字，不用寫單位」�
   expect(screen.getByText('本課獲得 25 XP')).toBeInTheDocument();
 });
 
+it('數字題接受分數：6/2 算對；寫不完整的分數只提示「請先輸入數字」，不是「不用寫單位」', async () => {
+  const { user } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  const input = screen.getByRole('textbox', { name: '3 減 0 是多少？' });
+  for (const raw of ['6/', '/2', '6//2', '6/0']) {
+    await user.clear(input);
+    await user.type(input, raw);
+    await user.click(button('檢查'));
+    expect(screen.getByText('請先輸入數字'), raw).toBeInTheDocument();
+    expect(screen.queryByText('只要填數字，不用寫單位'), raw).not.toBeInTheDocument();
+    expect(screen.queryByText('還不對'), raw).not.toBeInTheDocument();
+  }
+  // 分數加了單位：這時才是「不用寫單位」
+  await user.clear(input);
+  await user.type(input, '6/2 公尺');
+  await user.click(button('檢查'));
+  expect(screen.getByText('只要填數字，不用寫單位')).toBeInTheDocument();
+
+  // 全形的分數也行，而且仍然算第一次就答對
+  await user.clear(input);
+  await user.type(input, '６／２');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+  expect(screen.getByText('本課獲得 25 XP')).toBeInTheDocument();
+});
+
 it('表格題的格子多打了單位，也提示「只要填數字，不用寫單位」', async () => {
   const { user } = renderPlayer(tableLesson);
   await user.type(screen.getByRole('textbox', { name: '速度，1 秒' }), '8 m/s');
