@@ -42,6 +42,17 @@ npm run build   # 檢查型別並打包到 dist/
    - 引導裡面不能再有引導，表格的空格答案不能是負數（需要負數就改用數字題）。
    - 不放 emoji。
 
+### 每站的重點與複習
+
+每一站可以有一份重點總結與複習，放在 `src/content/reviews/`，檔名是 `站號-英文名稱.ts`（例如 `1-motion.ts`），一樣會自動讀到。檔案裡用 `export default` 匯出一個 `StationReview`（可以參考 `1-motion.ts`），`stationId` 要和檔名開頭一樣，一站只能有一個。`npm test` 會檢查：
+
+- `points`：3 到 6 個重點，每個不超過 60 個字元。
+- `formulas`：至少 2 條公式，每條有名稱和公式。
+- `traps`：至少 3 對常見陷阱，每對是「錯的想法」和「正確的想法」，優先寫學習時真的犯過的錯。
+- `steps`：5 到 8 題複習題，每一步都是題目（觀念放在重點裡），至少用到兩種題型；上面那些課程的檢查也會套用在這些題目上。
+
+複習題最好混合這一站好幾課的觀念，不要照抄原題。複習的 id 是 `review-站號`，不算進上課順序，做不做都不影響下一課解鎖。
+
 ### 步驟的種類
 
 | `kind` | 用途 |
@@ -119,5 +130,5 @@ export default example;
 
 ## 授權
 
-- 程式碼採用 MIT 授權，見 [`LICENSE`](LICENSE)。`src/content/` 裡的程式也是：測試檔 `content.test.ts`、`discover.test.ts`，自動讀取課程的 `discover.ts`，以及 `stations.ts` 裡的程式邏輯（例如 `findLesson`、`orderedLessonIds`）。
-- 課程內容採用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant)，見 [`src/content/LICENSE.md`](src/content/LICENSE.md)。課程內容指的是 `src/content/lessons/` 底下的每一課，以及 `stations.ts` 裡的站名；課程順序由 `lessons/` 底下的檔名決定。引用或改編時請標示出處，並以相同方式分享。
+- 程式碼採用 MIT 授權，見 [`LICENSE`](LICENSE)。`src/content/` 裡的程式也是：測試檔 `content.test.ts`、`discover.test.ts`，自動讀取課程和複習的 `discover.ts`，以及 `stations.ts` 裡的程式邏輯（例如 `findLesson`、`orderedLessonIds`、`reviewOf`）。
+- 課程內容採用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant)，見 [`src/content/LICENSE.md`](src/content/LICENSE.md)。課程內容指的是 `src/content/lessons/` 底下的每一課、`src/content/reviews/` 底下每一站的重點與複習，以及 `stations.ts` 裡的站名；課程順序由 `lessons/` 底下的檔名決定。引用或改編時請標示出處，並以相同方式分享。

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Lesson } from '../lib/types';
-import { collectLessons } from './discover';
+import type { Lesson, StationReview } from '../lib/types';
+import { collectLessons, collectReviews } from './discover';
 
 const lesson = (id: string): Lesson => ({ id, title: `課 ${id}`, steps: [] });
 
@@ -156,5 +156,95 @@ describe('collectLessons：只接受已知的站', () => {
 
   it('站在清單裡就沒問題', () => {
     expect(collectLessons(modules({ '7-1-x.ts': '7-1' }), [1, 2, 3, 4, 5, 6, 7]).problems).toEqual([]);
+  });
+});
+
+// ---- 每站的複習：reviews/ 底下的檔案，檔名「站號-英文名稱.ts」 ----
+
+const review = (stationId: number): StationReview => ({ stationId, points: [], formulas: [], traps: [], steps: [] });
+
+/** 檔名 → stationId；路徑和 `import.meta.glob` 給的一樣，前面有 `./reviews/`。 */
+function reviewModules(files: Record<string, number>): Record<string, { default: StationReview }> {
+  return Object.fromEntries(Object.entries(files).map(([file, stationId]) => [`./reviews/${file}`, { default: review(stationId) }]));
+}
+
+describe('collectReviews：正常的複習檔', () => {
+  it('沒有任何複習檔：沒有問題，也沒有任何一站', () => {
+    const { byStation, problems } = collectReviews({});
+    expect(problems).toEqual([]);
+    expect(byStation.size).toBe(0);
+  });
+
+  it('依檔名開頭的站號分站，回傳的就是檔案裡 default 匯出的那一個物件', () => {
+    const mods = reviewModules({ '2-force.ts': 2, '1-motion.ts': 1 });
+    const { byStation, problems } = collectReviews(mods, [1, 2, 3]);
+    expect(problems).toEqual([]);
+    expect([...byStation.keys()].sort()).toEqual([1, 2]);
+    expect(byStation.get(1)).toBe(mods['./reviews/1-motion.ts'].default);
+    expect(byStation.get(2)).toBe(mods['./reviews/2-force.ts'].default);
+  });
+
+  it('站號可以是兩位數，英文名稱可以有數字和連字號', () => {
+    const { byStation, problems } = collectReviews(reviewModules({ '12-light-2.ts': 12 }));
+    expect(problems).toEqual([]);
+    expect(byStation.get(12)?.stationId).toBe(12);
+  });
+});
+
+describe('collectReviews：檔名和 stationId 不符', () => {
+  it('2-force.ts 裡的 stationId 是 3：問題訊息有檔名，也說出兩邊的值，這個檔案不算進任何一站', () => {
+    const { byStation, problems } = collectReviews(reviewModules({ '2-force.ts': 3 }));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('2-force.ts');
+    expect(problems[0]).toContain('2');
+    expect(problems[0]).toContain('3');
+    expect(byStation.size).toBe(0);
+  });
+});
+
+describe('collectReviews：一站只能有一個複習檔', () => {
+  it('第 1 站有兩個複習檔：問題訊息有兩個檔名', () => {
+    const { byStation, problems } = collectReviews(reviewModules({ '1-motion.ts': 1, '1-motion-again.ts': 1 }));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('第 1 站');
+    expect(problems[0]).toContain('1-motion.ts');
+    expect(problems[0]).toContain('1-motion-again.ts');
+    expect(byStation.size).toBe(1);
+  });
+});
+
+describe('collectReviews：檔名格式', () => {
+  it.each(['review.ts', '1.ts', '1-.ts', 'a-motion.ts', '1-Motion.ts', '1-motion.tsx', '1-運動.ts', '1-a_b.ts', '1-1-motion.ts', 'index.ts'])(
+    '%s 不符合「站號-英文名稱.ts」：問題訊息有檔名',
+    (file) => {
+      const { problems, byStation } = collectReviews(reviewModules({ [file]: 1 }));
+      expect(problems.some((p) => p.includes(file)), `問題：${problems.join(' / ')}`).toBe(true);
+      expect(byStation.size).toBe(0);
+    },
+  );
+});
+
+describe('collectReviews：沒有 default 匯出', () => {
+  it('用具名匯出的複習檔：問題訊息有檔名，提醒要 export default', () => {
+    const mods = { './reviews/1-motion.ts': { motion: review(1) } } as unknown as Record<string, { default: StationReview }>;
+    const { problems, byStation } = collectReviews(mods);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('1-motion.ts');
+    expect(problems[0]).toContain('export default');
+    expect(byStation.size).toBe(0);
+  });
+});
+
+describe('collectReviews：只接受已知的站', () => {
+  it('第 8 站不存在：問題訊息有檔名', () => {
+    const { problems, byStation } = collectReviews(reviewModules({ '8-extra.ts': 8 }), [1, 2, 3, 4, 5, 6, 7]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('8-extra.ts');
+    expect(problems[0]).toContain('第 8 站');
+    expect(byStation.size).toBe(0);
+  });
+
+  it('沒給站的清單時不檢查站號', () => {
+    expect(collectReviews(reviewModules({ '8-extra.ts': 8 })).problems).toEqual([]);
   });
 });

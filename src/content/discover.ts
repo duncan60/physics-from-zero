@@ -1,4 +1,4 @@
-import type { Lesson } from '../lib/types';
+import type { Lesson, StationReview } from '../lib/types';
 
 /** `lessons/` 底下的檔案名稱：站-課-英文名稱.ts，例如 1-6-my-lesson.ts。 */
 const LESSON_FILE = /^(\d+)-(\d+)-[a-z0-9-]+\.ts$/;
@@ -76,6 +76,63 @@ export function collectLessons(modules: Record<string, { default: Lesson }>, sta
     for (let n = 1; n <= numbers[numbers.length - 1]; n++) if (!numbers.includes(n)) missing.push(`${station}-${n}`);
     const lacking = missing.length > 0 ? `，缺 ${missing.join('、')}` : '';
     problems.push(`第 ${station} 站的課號要從 1 開始、連續不跳號：現在有 ${have}${lacking}`);
+  }
+
+  return { byStation, problems };
+}
+
+/** `reviews/` 底下的檔案名稱：站號-英文名稱.ts，例如 1-motion.ts。英文名稱用小寫英文開頭，才不會和課程檔（1-1-…）搞混。 */
+const REVIEW_FILE = /^(\d+)-[a-z][a-z0-9-]*\.ts$/;
+
+export interface DiscoveredReviews {
+  /** 每一站的複習。沒有複習的站不會出現。 */
+  byStation: Map<number, StationReview>;
+  /** 每一則是一句話，開頭是有問題的檔名，可以直接顯示給人看。空的代表沒有問題。 */
+  problems: string[];
+}
+
+/**
+ * 把 `import.meta.glob('./reviews/*.ts', { eager: true })` 讀到的複習檔依站整理，
+ * 並檢查檔名格式、檔名開頭的站號和 stationId 一樣、一站只有一個複習檔。有問題的檔案不會出現在 byStation。
+ * `stationIds`：有給的話，不在清單裡的站也算問題。
+ */
+export function collectReviews(modules: Record<string, { default: StationReview }>, stationIds?: readonly number[]): DiscoveredReviews {
+  const problems: string[] = [];
+  const byStation = new Map<number, StationReview>();
+  const fileOfStation = new Map<number, string>();
+
+  // 依檔名排序，重複時保留哪一個、回報哪一個，每次都一樣。
+  const entries = Object.entries(modules)
+    .map(([path, module]) => [path.slice(path.lastIndexOf('/') + 1), module] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  for (const [file, module] of entries) {
+    const name = REVIEW_FILE.exec(file);
+    if (name === null) {
+      problems.push(`${file}：檔名要是「站號-英文名稱.ts」，英文名稱用小寫英文開頭，只能用小寫英文、數字和連字號，例如 3-energy.ts`);
+      continue;
+    }
+    const review = (module as Partial<typeof module>).default;
+    if (review === undefined) {
+      problems.push(`${file}：沒有 export default。複習檔要用 export default 匯出一個 StationReview`);
+      continue;
+    }
+    const station = Number(name[1]);
+    if (review.stationId !== station) {
+      problems.push(`${file}：檔名開頭是 ${station}，但 stationId 是 ${review.stationId}，兩邊要一樣`);
+      continue;
+    }
+    if (stationIds !== undefined && !stationIds.includes(station)) {
+      problems.push(`${file}：沒有第 ${station} 站（站有 ${stationIds.join('、')}）`);
+      continue;
+    }
+    const earlier = fileOfStation.get(station);
+    if (earlier !== undefined) {
+      problems.push(`${file}：第 ${station} 站已經有複習檔 ${earlier}，一站只能有一個複習檔`);
+      continue;
+    }
+    fileOfStation.set(station, file);
+    byStation.set(station, review);
   }
 
   return { byStation, problems };

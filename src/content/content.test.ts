@@ -3,10 +3,16 @@ import { blankCells } from '../lib/answer';
 import { checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
-import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step } from '../lib/types';
-import { findLesson, isLastLessonOfStation, orderedLessonIds, stationOf, stations } from './stations';
+import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
+import { findLesson, isLastLessonOfStation, orderedLessonIds, reviewAsLesson, reviewLessonId, reviewOf, stationOf, stations } from './stations';
 
 const lessons = stations.flatMap((s) => s.lessons);
+
+/** 有複習的站的複習，依站號排序。 */
+const reviews: StationReview[] = stations.flatMap((s) => {
+  const review = reviewOf(s.id);
+  return review === undefined ? [] : [review];
+});
 
 /** 主步驟加上每個主步驟 guide 裡的步驟，依出現順序。 */
 function withGuides(lesson: Lesson): (Step | GuideStep)[] {
@@ -365,7 +371,8 @@ it('2-1 推空購物車的滑桿：0 到 40 N、間距 1、從 0 開始、答案
   });
 });
 
-describe.each(lessons.map((l) => [l.id, l] as const))('課程 %s', (_id, lesson) => {
+/** 每一課都要通過的內容檢查。每站的複習包裝成一課（reviewAsLesson）之後，也套用同一套。 */
+function lessonContentChecks(lesson: Lesson): void {
   it('5 到 8 個步驟', () => {
     expect(lesson.steps.length).toBeGreaterThanOrEqual(5);
     expect(lesson.steps.length).toBeLessThanOrEqual(8);
@@ -416,4 +423,107 @@ describe.each(lessons.map((l) => [l.id, l] as const))('課程 %s', (_id, lesson)
   it('沒有 emoji', () => {
     expect(JSON.stringify(lesson)).not.toMatch(/\p{Extended_Pictographic}/u);
   });
+}
+
+describe.each(lessons.map((l) => [l.id, l] as const))('課程 %s', (_id, lesson) => lessonContentChecks(lesson));
+
+// ---- 每站的重點總結與複習：reviews/ 底下的檔案自動讀進來，不算進課程順序，也不影響解鎖 ----
+
+it('第 1 站和第 2 站都有複習', () => {
+  expect(reviewOf(1)?.stationId).toBe(1);
+  expect(reviewOf(2)?.stationId).toBe(2);
+});
+
+it('有複習的站一定有課程（沒有課程的站，地圖上不會有「本站重點與複習」）', () => {
+  for (const review of reviews) {
+    expect(stations.find((s) => s.id === review.stationId)?.lessons.length, `第 ${review.stationId} 站`).toBeGreaterThan(0);
+  }
+});
+
+it('reviewOf：沒有這一站時回傳 undefined', () => {
+  expect(reviewOf(0)).toBeUndefined();
+  expect(reviewOf(99)).toBeUndefined();
+});
+
+it('reviewLessonId：複習的 id 是「review-站號」', () => {
+  expect(reviewLessonId(1)).toBe('review-1');
+  expect(reviewLessonId(2)).toBe('review-2');
+});
+
+it('reviewAsLesson：id 是 review-站號，標題是「第 N 站複習」，步驟就是複習題', () => {
+  for (const review of reviews) {
+    const lesson = reviewAsLesson(review);
+    expect(lesson.id).toBe(`review-${review.stationId}`);
+    expect(lesson.title).toBe(`第 ${review.stationId} 站複習`);
+    expect(lesson.steps).toBe(review.steps);
+  }
+});
+
+it('findLesson 也找得到複習：回傳的就是 reviewAsLesson 的結果；沒有複習的站找不到', () => {
+  for (const review of reviews) expect(findLesson(reviewLessonId(review.stationId))).toEqual(reviewAsLesson(review));
+  expect(findLesson('review-99')).toBeUndefined();
+  expect(findLesson('review-')).toBeUndefined();
+});
+
+it('複習不在 orderedLessonIds 裡：課程的解鎖順序不變', () => {
+  for (const review of reviews) expect(orderedLessonIds).not.toContain(reviewLessonId(review.stationId));
+  expect(orderedLessonIds.some((id) => id.startsWith('review-'))).toBe(false);
+});
+
+it('複習不是任何一站的最後一課（完成複習時不會再出現「看本站重點」）', () => {
+  for (const review of reviews) expect(isLastLessonOfStation(reviewLessonId(review.stationId))).toBe(false);
+});
+
+it('複習的 id 和課程的 id 不會撞在一起', () => {
+  const ids = [...orderedLessonIds, ...reviews.map((r) => reviewLessonId(r.stationId))];
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
+describe.each(reviews.map((r) => [r.stationId, r] as const))('第 %i 站的重點與複習', (_id, review) => {
+  it('3 到 6 個重點，每個不超過 60 字元', () => {
+    expect(review.points.length).toBeGreaterThanOrEqual(3);
+    expect(review.points.length).toBeLessThanOrEqual(6);
+    for (const point of review.points) {
+      expect(point.trim(), '重點是空的').not.toBe('');
+      expect(point.length, `重點太長：${point}`).toBeLessThanOrEqual(60);
+    }
+  });
+
+  it('至少 2 條公式，名稱和公式都不是空的，名稱不重複', () => {
+    expect(review.formulas.length).toBeGreaterThanOrEqual(2);
+    for (const { name, formula } of review.formulas) {
+      expect(name.trim(), '公式名稱是空的').not.toBe('');
+      expect(formula.trim(), `「${name}」的公式是空的`).not.toBe('');
+    }
+    const names = review.formulas.map((f) => f.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('至少 3 對常見陷阱，錯的想法和正確的想法都不是空的', () => {
+    expect(review.traps.length).toBeGreaterThanOrEqual(3);
+    for (const { wrong, right } of review.traps) {
+      expect(wrong.trim(), '錯的想法是空的').not.toBe('');
+      expect(right.trim(), `「${wrong}」的正確想法是空的`).not.toBe('');
+    }
+  });
+
+  // 觀念放在總結頁（重點、公式、陷阱），複習本身全部是題目。
+  it('5 到 8 題，每一步都是要作答的題目', () => {
+    expect(review.steps.length).toBeGreaterThanOrEqual(5);
+    expect(review.steps.length).toBeLessThanOrEqual(8);
+    for (const step of review.steps) expect(isQuestion(step), `${step.id} 是 ${step.kind}，不是題目`).toBe(true);
+  });
+
+  it('至少用到兩種題型', () => {
+    expect(new Set(review.steps.map((s) => s.kind)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('重點、公式和陷阱也不放 emoji，也不教「負號就代表減速」', () => {
+    const text = JSON.stringify(review);
+    expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
+    expect(text).not.toMatch(/負號就?代表減速/);
+  });
+
+  // 複習題沿用課程的檢查：可作答、說明、觀念卡長度、拼算式與滑桿的規則、引導不巢狀、表格不填負數等。
+  describe('複習題套用課程的內容檢查', () => lessonContentChecks(reviewAsLesson(review)));
 });

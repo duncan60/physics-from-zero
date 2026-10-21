@@ -20,6 +20,19 @@ export interface Lesson { id: string; title: string; steps: Step[] }
 export interface Station { id: number; title: string; lessons: Lesson[] } // lessons 為空代表「即將推出」
 
 /**
+ * 一站的重點總結與複習（`src/content/reviews/站號-英文名稱.ts`，export default）。
+ * 總結頁顯示 points（重點）、formulas（公式表）、traps（常見陷阱：錯的想法 → 正確的想法）；
+ * 按「開始複習」後，steps 包裝成一課（id `review-站號`）照一般上課流程進行。
+ */
+export interface StationReview {
+  stationId: number;
+  points: string[];
+  formulas: { name: string; formula: string }[];
+  traps: { wrong: string; right: string }[];
+  steps: Step[];
+}
+
+/**
  * 按一次「檢查」（或配一對）的結果：
  * correct：這一題答對了；partial：對了一部分，題目還沒結束（拼算式拼對了算式、配對配對了一對但還沒配完）；wrong：答錯了。
  */
