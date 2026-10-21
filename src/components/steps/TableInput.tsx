@@ -1,6 +1,6 @@
-import { blankCells } from '../../lib/answer';
+import { blankCells, formatNumber } from '../../lib/answer';
 import type { TableStep } from '../../lib/types';
-import { formatNumber, onEnterKey } from './NumberInput';
+import { onEnterKey } from './NumberInput';
 
 /**
  * 表格題。`values` 和 `marks` 都依 `blankCells(step)` 的順序，一個空格一個。

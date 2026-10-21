@@ -1,11 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
-/** 顯示用的數字：負數用數學負號「−」，和課程內文的寫法一致。 */
-export function formatNumber(value: number): string {
-  return value < 0 ? `−${-value}` : String(value);
-}
-
 /**
  * 在輸入框按 Enter 就等於按「檢查」。
  * 用注音等輸入法選字時按的 Enter 只是在確認文字，不算（Safari 這時 isComposing 是 false，但 keyCode 是 229）。

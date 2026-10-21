@@ -2,6 +2,11 @@ import type { ChoiceStep, NumberStep, TableStep } from './types';
 
 export type CheckResult = { correct: true } | { correct: false; feedback?: string };
 
+/** 顯示用的數字：負數用數學負號「−」，和課程內文的寫法一致。 */
+export function formatNumber(value: number): string {
+  return value < 0 ? `−${-value}` : String(value);
+}
+
 // 浮點誤差的緩衝：避免 |9.6 - 9.8| 算成 0.20000000000000107 而在邊界上被判錯。
 const EPSILON = 1e-9;
 

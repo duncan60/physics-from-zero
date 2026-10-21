@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber, parseNumberInput } from '../lib/answer';
+import { blankCells, checkChoice, checkNumber, checkTable, formatNumber, hasUnitAfterNumber, parseNumberInput } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
 import { acceptedNote, checkFormula, formulaTiles, parseFormula } from '../lib/formula';
 import { checkSlider } from '../lib/slider';
@@ -7,7 +7,7 @@ import type { CheckOutcome, FormulaStep, QuestionStep } from '../lib/types';
 import { CartAnim } from './sims/CartAnim';
 import { ChoiceInput } from './steps/ChoiceInput';
 import { FormulaInput, shownFormula, spokenFormula } from './steps/FormulaInput';
-import { NumberInput, formatNumber } from './steps/NumberInput';
+import { NumberInput } from './steps/NumberInput';
 import { SliderInput } from './steps/SliderInput';
 import { TableInput } from './steps/TableInput';
 import { useActionGuard } from './useActionGuard';

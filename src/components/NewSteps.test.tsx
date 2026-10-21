@@ -1,12 +1,14 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { reviewAsLesson, reviewOf, stations } from '../content/stations';
 import type { SoundKind } from '../lib/sound';
 import type { FormulaStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
 import { MatchCard } from './MatchCard';
 import { QuestionCard } from './QuestionCard';
 import { SoundProvider } from './SoundContext';
+import { CART_FULL_ACCEL } from './sims/CartAnim';
 import { spokenTile, tileName } from './steps/FormulaInput';
 
 // 測試專用的題目，不依賴真實課程內容。
@@ -598,6 +600,115 @@ it('滑桿：按「檢查」後購物車用 a = F ÷ m 往前加速，答對、�
   expect(cartScene()).toHaveAccessibleName('質量 10 公斤的購物車，推力 20 N，往前加速');
   // 一樣的時間裡，推力 4 倍 → 加速度 4 倍 → 跑的距離也是 4 倍
   expect(cartTravel()).toBeCloseTo(slow * 4);
+  // 加速度這一行是一般的文字：結果已經由回饋區念出來，不再是第二個 role="status"
+  expect(accelLine()?.closest('[role="status"]')).toBeNull();
+});
+
+it('滑桿：推力一樣、質量不一樣，購物車跑的距離不一樣（a = F ÷ m，質量 2 倍、距離一半）；距離和滑桿的最大值無關', async () => {
+  async function travelFor(step: SliderStep, force: number): Promise<number> {
+    const { user, unmount } = renderCard(step);
+    fireEvent.change(slider(), { target: { value: String(force) } });
+    await user.click(button('檢查'));
+    const travel = cartTravel();
+    unmount();
+    return travel;
+  }
+  const light = await travelFor(sliderStep, 20); // 20 ÷ 10 = 2
+  const heavy = await travelFor({ ...sliderStep, cartMass: 20 }, 20); // 20 ÷ 20 = 1
+  expect(light).toBeGreaterThan(0);
+  expect(heavy).toBeCloseTo(light / 2);
+  // 滑桿的範圍不一樣（箭頭的比例跟著變），加速度一樣，跑的距離就一樣
+  expect(await travelFor({ ...sliderStep, max: 80 }, 20)).toBeCloseTo(light);
+});
+
+/** 課程和複習裡每一題有購物車的滑桿。 */
+const contentCartSliders: SliderStep[] = [
+  ...stations.flatMap((station) => station.lessons),
+  ...stations.flatMap((station) => {
+    const review = reviewOf(station.id);
+    return review === undefined ? [] : [reviewAsLesson(review)];
+  }),
+]
+  .flatMap((lesson) => lesson.steps)
+  .filter((step): step is SliderStep => step.kind === 'slider' && step.anim === 'cart');
+
+/** SVG path 的 d 裡每一點的 x 座標。購物車只用 M、L、H、Z 畫，其他指令就讓測試失敗。 */
+function pathXs(d: string): number[] {
+  expect(d).toMatch(/^[MLHZ0-9 .,-]+$/);
+  const xs: number[] = [];
+  for (const [, command, args] of d.matchAll(/([MLHZ])([^MLHZ]*)/g)) {
+    const numbers = args.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    if (command === 'H') xs.push(...numbers);
+    else if (command === 'M' || command === 'L') xs.push(...numbers.filter((_, i) => i % 2 === 0));
+  }
+  return xs;
+}
+
+/** transform="translate(x y)" 的 x；沒有 transform 是 0。 */
+function translateX(element: Element | null): number {
+  const transform = element?.getAttribute('transform');
+  if (transform === null || transform === undefined) return 0;
+  const match = /^translate\(([-\d.]+)[ ,]+[-\d.]+\)$/.exec(transform);
+  expect(match, transform).not.toBeNull();
+  return Number(match?.[1]);
+}
+
+/**
+ * 購物車畫面最左、最右的 x（viewBox 座標）：力的箭頭、購物車（加上一半的線寬）和兩個標示。
+ * jsdom 量不到字寬，標示用比實際寬一點的估計：16px 粗體，中文字 1em，其他字元 0.7em。
+ */
+function cartSceneExtents(): { left: number; right: number } {
+  const group = cartGroup();
+  if (group === null) throw new Error('找不到購物車');
+  const travel = translateX(group);
+  const xs: number[] = [];
+  const arrow = group.querySelector('.lp-cart-force');
+  if (arrow !== null) xs.push(...(arrow.getAttribute('points') ?? '').trim().split(/\s+/).map((point) => Number(point.split(',')[0])));
+  const body = group.querySelector(':scope > g');
+  const bodyX = translateX(body);
+  const HALF_STROKE = 2;
+  for (const path of body?.querySelectorAll('path') ?? []) {
+    for (const x of pathXs(path.getAttribute('d') ?? '')) xs.push(bodyX + x - HALF_STROKE, bodyX + x + HALF_STROKE);
+  }
+  for (const wheel of body?.querySelectorAll('circle') ?? []) {
+    const cx = Number(wheel.getAttribute('cx'));
+    const r = Number(wheel.getAttribute('r'));
+    xs.push(bodyX + cx - r - HALF_STROKE, bodyX + cx + r + HALF_STROKE);
+  }
+  for (const label of group.querySelectorAll('text')) {
+    const width = [...(label.textContent ?? '')].reduce((sum, ch) => sum + (/[\u2e80-\u9fff]/.test(ch) ? 16 : 16 * 0.7), 0);
+    const x = Number(label.getAttribute('x'));
+    const anchor = label.getAttribute('text-anchor');
+    const start = anchor === 'end' ? x - width : anchor === 'middle' ? x - width / 2 : x;
+    xs.push(start, start + width);
+  }
+  return { left: travel + Math.min(...xs), right: travel + Math.max(...xs) };
+}
+
+it('滑桿（課程裡每一題有購物車的）：拉到最大值，出發前和開到終點時，箭頭、標示和購物車都在 viewBox 裡', async () => {
+  expect(contentCartSliders.map((s) => s.id)).toEqual(expect.arrayContaining(['empty-cart-force', 'moon-cart-force']));
+  mockReducedMotion(); // 終點直接畫出來（transform），不用等動畫
+  for (const step of contentCartSliders) {
+    const mass = step.cartMass;
+    if (mass === undefined) throw new Error(`${step.id}：有購物車的滑桿要寫 cartMass`);
+    // 最大推力的加速度沒有超過畫面的刻度：購物車不會被擋在右邊界，推力越大一定開得越遠
+    expect(step.max / mass, step.id).toBeLessThanOrEqual(CART_FULL_ACCEL);
+    const { user, unmount } = renderCard(step);
+    fireEvent.change(slider(), { target: { value: String(step.max) } });
+    const [viewLeft, , viewWidth] = (cartScene().getAttribute('viewBox') ?? '').split(' ').map(Number);
+
+    const start = cartSceneExtents();
+    expect(start.left, `${step.id} 出發前`).toBeGreaterThanOrEqual(viewLeft);
+    expect(start.right, `${step.id} 出發前`).toBeLessThanOrEqual(viewWidth);
+
+    await user.click(button('檢查'));
+    expect(translateX(cartGroup()), step.id).toBeCloseTo(cartTravel());
+    expect(cartTravel(), step.id).toBeGreaterThan(0);
+    const end = cartSceneExtents();
+    expect(end.left, `${step.id} 終點`).toBeGreaterThanOrEqual(viewLeft);
+    expect(end.right, `${step.id} 終點`).toBeLessThanOrEqual(viewWidth);
+    unmount();
+  }
 });
 
 it('滑桿：推力 0 N 時加速度是 0，購物車不動', async () => {

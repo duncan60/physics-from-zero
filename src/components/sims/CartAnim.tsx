@@ -1,8 +1,9 @@
 import type { CSSProperties } from 'react';
+import { formatNumber } from '../../lib/answer';
 import { cartAccelerationText } from '../../lib/slider';
 import { useReducedMotion } from '../useReducedMotion';
 
-// SVG 的 viewBox 座標。左邊留給力的箭頭，購物車從 CART_X 出發往右開；最大推力時開 TRAVEL_MAX，剛好停在右邊界內。
+// SVG 的 viewBox 座標。左邊留給力的箭頭，購物車從 CART_X 出發往右開；加速度 CART_FULL_ACCEL 時開 TRAVEL_MAX，剛好停在右邊界內。
 const VIEW_W = 360;
 const VIEW_H = 110;
 const CART_X = 96; // 購物車把手（最左端）的位置
@@ -16,12 +17,19 @@ const HEAD_HALF = 8;
 const SHAFT_HALF = 3;
 const TRAVEL_MAX = VIEW_W - 4 - (CART_X + CART_W);
 
+/**
+ * 購物車跑的距離的固定刻度：加速度是這個值（公尺/秒²）時開 TRAVEL_MAX，距離和加速度成正比，
+ * 所以推力一樣、質量不一樣的兩題，車子開的距離也不一樣。比這個大的加速度停在 TRAVEL_MAX（不會開出畫面）；
+ * 課程裡每一題有購物車的滑桿，最大推力 ÷ 質量都不超過它（NewSteps.test.tsx 會檢查），推力越大一定開得越遠。
+ */
+export const CART_FULL_ACCEL = 4;
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function formatValue(value: number): string {
-  return value < 0 ? `−${-value}` : String(value);
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 /** 往右、尖端碰到把手的箭頭（一個多邊形）。很短時只剩一個縮小的三角形。 */
@@ -48,9 +56,10 @@ function arrowPoints(length: number): string {
 /**
  * 滑桿題上方的購物車：一開始就畫出購物車（標示質量）和推它的力的箭頭，箭頭長度跟著滑桿的值（0 沒有箭頭，最大值最長）。
  * `moving`（按了「檢查」之後）：購物車連同箭頭用 a = F ÷ m 從左往右加速（等加速度，位置和時間平方成正比），
- * 答對、答錯都動，下方寫出算出來的加速度。動畫的時間固定，所以跑的距離和加速度成正比：力太小，車就開得不遠。
- * 減少動態效果時不播放動畫，直接畫在終點。顏色都在 styles.css 用 CSS 變數設定，淺色、深色模式都看得清楚。
- * 沒有給 `mass` 時照樣畫，只是不標示質量、不寫加速度。
+ * 答對、答錯都動，下方寫出算出來的加速度。動畫的時間固定，所以跑的距離和加速度成正比（刻度見 CART_FULL_ACCEL）：
+ * 力太小、或車子太重，車就開得不遠。減少動態效果時不播放動畫，直接畫在終點。
+ * 顏色都在 styles.css 用 CSS 變數設定，淺色、深色模式都看得清楚。
+ * 沒有給 `mass` 時照樣畫，只是不標示質量、不寫加速度；算不出加速度，跑的距離改用推力佔滑桿最大值的比例。
  */
 export function CartAnim(props: {
   mass?: number;
@@ -62,12 +71,14 @@ export function CartAnim(props: {
 }): React.JSX.Element {
   const { mass, force, max, quantity, unit, moving } = props;
   const reduced = useReducedMotion();
-  // 加速度 a = F ÷ m 和推力成正比；最大推力對應最長的箭頭、最遠的距離。
-  const ratio = max > 0 ? Math.min(1, Math.max(0, force / max)) : 0;
-  const arrow = round2(ARROW_MAX * ratio);
-  const travel = round2(TRAVEL_MAX * ratio);
-  const forceText = `${quantity} ${formatValue(force)} ${unit}`;
-  const cartName = mass === undefined ? '購物車' : `質量 ${formatValue(mass)} 公斤的購物車`;
+  // 箭頭的長度跟著推力佔滑桿最大值的比例：最大推力是最長的箭頭。
+  const forceRatio = max > 0 ? clamp01(force / max) : 0;
+  const arrow = round2(ARROW_MAX * forceRatio);
+  // 跑的距離跟著加速度 a = F ÷ m，用固定的刻度（和滑桿的最大值無關）。
+  const travelRatio = mass === undefined ? forceRatio : mass > 0 ? clamp01(force / mass / CART_FULL_ACCEL) : 0;
+  const travel = round2(TRAVEL_MAX * travelRatio);
+  const forceText = `${quantity} ${formatNumber(force)} ${unit}`;
+  const cartName = mass === undefined ? '購物車' : `質量 ${formatNumber(mass)} 公斤的購物車`;
   const motion = moving ? (travel > 0 ? '，往前加速' : '，沒有動') : '';
   const play = moving && !reduced;
   const style = { '--lp-cart-travel': `${travel}px` } as CSSProperties;
@@ -89,7 +100,7 @@ export function CartAnim(props: {
           </text>
           {mass !== undefined && (
             <text className="lp-cart-label" x={CART_X + 46} y={LABEL_Y} textAnchor="middle">
-              {`${formatValue(mass)} 公斤`}
+              {`${formatNumber(mass)} 公斤`}
             </text>
           )}
           <g transform={`translate(${CART_X - 6} ${CART_DY})`}>
@@ -101,9 +112,10 @@ export function CartAnim(props: {
           </g>
         </g>
       </svg>
-      {/* 檢查之後寫出算出來的加速度；一直佔著一行，出現時下面的滑桿不會跳動。 */}
+      {/* 檢查之後寫出算出來的加速度；一直佔著一行，出現時下面的滑桿不會跳動。
+          一般的文字，不是即時區域：答對答錯由題目下方的回饋區念出來，這裡不再搶著念一次。 */}
       {mass !== undefined && (
-        <p className="lp-cart-accel" role="status">
+        <p className="lp-cart-accel">
           {moving ? cartAccelerationText(force, mass) : null}
         </p>
       )}

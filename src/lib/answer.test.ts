@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber, parseNumberInput } from './answer';
+import { blankCells, checkChoice, checkNumber, checkTable, formatNumber, hasUnitAfterNumber, parseNumberInput } from './answer';
 import type { ChoiceStep, NumberStep, TableStep } from './types';
 
 describe('parseNumberInput', () => {
@@ -106,4 +106,14 @@ describe('checkTable', () => {
   });
   it('部分錯', () => expect(checkTable(step, ['6', '6'])).toEqual({ result: { correct: false }, cellCorrect: [false, true] }));
   it('有空格沒填就是 invalid', () => expect(checkTable(step, ['8', ''])).toBe('invalid'));
+});
+
+describe('formatNumber（畫面上的數字）', () => {
+  it('負數用數學負號「−」（U+2212），其他照原樣；−0 寫成 0', () => {
+    expect(formatNumber(-10)).toBe('−10');
+    expect(formatNumber(-0.5)).toBe('−0.5');
+    expect(formatNumber(20)).toBe('20');
+    expect(formatNumber(0.47)).toBe('0.47');
+    expect(formatNumber(-0)).toBe('0');
+  });
 });

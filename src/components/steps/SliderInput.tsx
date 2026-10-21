@@ -1,7 +1,8 @@
 import { useId } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
+import { formatNumber } from '../../lib/answer';
 import type { SliderStep } from '../../lib/types';
-import { formatNumber, onEnterKey } from './NumberInput';
+import { onEnterKey } from './NumberInput';
 
 /** 對齊到 step 的格子上，並限制在 [min, max] 之內；toFixed 去掉 0.1 + 0.2 這類浮點誤差。 */
 function snapSlider(value: number, { min, max, step }: Pick<SliderStep, 'min' | 'max' | 'step'>): number {
