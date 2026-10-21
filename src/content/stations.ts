@@ -59,6 +59,11 @@ const reviewLessons: Lesson[] = STATION_IDS.flatMap((id) => {
   return review === undefined ? [] : [reviewAsLesson(review)];
 });
 
+/** 'review-1' → 1：這個 id 是第幾站的複習。一般的課、不存在的複習，都是 undefined。 */
+export function reviewStationOf(lessonId: string): number | undefined {
+  return STATION_IDS.find((id) => reviewOf(id) !== undefined && reviewLessonId(id) === lessonId);
+}
+
 /** 用 id 找課程；每站的複習（review-站號）也找得到。 */
 export function findLesson(id: string): Lesson | undefined {
   return allLessons.find((lesson) => lesson.id === id) ?? reviewLessons.find((lesson) => lesson.id === id);

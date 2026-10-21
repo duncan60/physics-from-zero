@@ -4,7 +4,7 @@ import { checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
 import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
-import { findLesson, isLastLessonOfStation, orderedLessonIds, reviewAsLesson, reviewLessonId, reviewOf, stationOf, stations } from './stations';
+import { findLesson, isLastLessonOfStation, orderedLessonIds, reviewAsLesson, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './stations';
 
 const lessons = stations.flatMap((s) => s.lessons);
 
@@ -468,6 +468,14 @@ it('findLesson 也找得到複習：回傳的就是 reviewAsLesson 的結果；�
 it('複習不在 orderedLessonIds 裡：課程的解鎖順序不變', () => {
   for (const review of reviews) expect(orderedLessonIds).not.toContain(reviewLessonId(review.stationId));
   expect(orderedLessonIds.some((id) => id.startsWith('review-'))).toBe(false);
+});
+
+it('reviewStationOf：複習的 id 對回它那一站；一般的課、不存在的複習都是 undefined', () => {
+  for (const review of reviews) expect(reviewStationOf(reviewLessonId(review.stationId))).toBe(review.stationId);
+  for (const id of orderedLessonIds) expect(reviewStationOf(id), id).toBeUndefined();
+  expect(reviewStationOf('review-99')).toBeUndefined();
+  expect(reviewStationOf('review-')).toBeUndefined();
+  expect(reviewStationOf('')).toBeUndefined();
 });
 
 it('複習不是任何一站的最後一課（完成複習時不會再出現「看本站重點」）', () => {

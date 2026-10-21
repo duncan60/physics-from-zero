@@ -1,12 +1,14 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
+import { stations } from './content/stations';
 import { STORAGE_KEY, completeLesson, loadProgress, localDayKey, setSoundOn } from './lib/progress';
 import type { Progress } from './lib/progress';
 
-// App 怎麼接 LessonPlayer 的 onComplete／onExit：換成一個假的上課畫面，不用真的把一課上完。
-// 和真的 LessonPlayer 一樣：完成畫面一出現就呼叫 onComplete（只一次），完成畫面的「回到地圖」和中途「離開」都走 onExit。
+// App 怎麼接 LessonPlayer 的 onComplete／onExit／onShowStationSummary：換成一個假的上課畫面，不用真的把一課上完。
+// 和真的 LessonPlayer 一樣：完成畫面一出現就呼叫 onComplete（只一次），完成畫面的「回到地圖」和中途「離開」都走 onExit；
+// 有 onShowStationSummary 時，完成畫面多一個「看本站重點」。
 // 真正的上課流程在 components/LessonPlayer.test.tsx 和 App.lessons.test.tsx 測。
 vi.mock('./components/LessonPlayer', async () => {
   const { useState } = await import('react');
@@ -14,12 +16,18 @@ vi.mock('./components/LessonPlayer', async () => {
     lesson: { id: string; title: string };
     onComplete: (result: { xp: number; perfect: boolean; accuracy: number; durationMs: number }) => void;
     onExit: () => void;
+    onShowStationSummary?: () => void;
   }): React.JSX.Element {
     const [done, setDone] = useState(false);
     if (done) {
       return (
         <section aria-label={props.lesson.title}>
           <h2>假的完成畫面</h2>
+          {props.onShowStationSummary !== undefined && (
+            <button type="button" onClick={props.onShowStationSummary}>
+              看本站重點
+            </button>
+          )}
           <button type="button" onClick={props.onExit}>
             回到地圖
           </button>
@@ -331,4 +339,130 @@ it('存不進去時，連上兩課，XP 仍然在畫面上累加（不會被讀�
   expect(screen.getByText('30 XP')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: '回到地圖' }));
   expect(screen.getByRole('link', { name: /加速度/ })).toHaveTextContent('可以上');
+});
+
+// ---- 每站的重點總結與複習 ----
+
+/** 這一站所有課程的 id，依課號排序。 */
+function lessonIdsOf(stationId: number): string[] {
+  return stations.find((station) => station.id === stationId)?.lessons.map((lesson) => lesson.id) ?? [];
+}
+
+function seedProgress(progress: Progress): void {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+}
+
+/** 某一站路線上「本站重點與複習」的連結。 */
+function reviewLink(stationId: number): HTMLElement {
+  const station = stations.find((s) => s.id === stationId);
+  if (station === undefined) throw new Error(`沒有第 ${stationId} 站`);
+  return within(screen.getByRole('region', { name: `第 ${station.id} 站 ${station.title}` })).getByRole('link', { name: /本站重點與複習/ });
+}
+
+it('上完一站的最後一課：完成畫面有「看本站重點」，按了到總結頁，不留下歷史紀錄', async () => {
+  const station1 = lessonIdsOf(1);
+  const last = stations[0].lessons[station1.length - 1];
+  seedProgress({ version: 2, completed: station1.slice(0, -1), perfect: [], xp: 40, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(screen.getByRole('link', { name: new RegExp(last.title) }));
+  expect(window.location.hash).toBe(`#/lesson/${last.id}`);
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  expect(storedProgress()).toMatchObject({ completed: station1, xp: 55 });
+
+  await user.click(screen.getByRole('button', { name: '看本站重點' }));
+  expect(window.location.hash).toBe('#/review/1');
+  expect(screen.getByRole('heading', { name: '第 1 站重點：運動' })).toBeInTheDocument();
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+
+  // 和「回到地圖」一樣取代這一筆：上一頁回到地圖，不會重新打開剛上完的課
+  await goBack();
+  expect(screen.queryByRole('button', { name: '假裝上完' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: '第 1 站重點：運動' })).not.toBeInTheDocument();
+  expect(reviewLink(1)).toHaveTextContent('可以上');
+});
+
+it('不是最後一課：完成畫面沒有「看本站重點」', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('link', { name: /慣性/ }));
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  expect(screen.getByRole('heading', { name: '假的完成畫面' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '看本站重點' })).not.toBeInTheDocument();
+});
+
+it('最後一課上完了，但這一站前面還有課沒上完：沒有「看本站重點」（點了也只會看到還沒解鎖）', async () => {
+  const station1 = lessonIdsOf(1);
+  const beforeLast = station1[station1.length - 2];
+  const last = station1[station1.length - 1];
+  seedProgress({ version: 2, completed: [beforeLast], perfect: [], xp: 10, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
+  window.location.hash = `#/lesson/${last}`;
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  expect(screen.getByRole('heading', { name: '假的完成畫面' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '看本站重點' })).not.toBeInTheDocument();
+});
+
+it('複習上完：和一般課程一樣存進 completed／perfect、加 XP；地圖上的節點變成完美，下一站第一課照樣是目前這一課', async () => {
+  const station1 = lessonIdsOf(1);
+  seedProgress({ version: 2, completed: station1, perfect: [], xp: 100, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(reviewLink(1));
+  expect(window.location.hash).toBe('#/review/1');
+  await user.click(screen.getByRole('button', { name: '開始複習' }));
+  expect(window.location.hash).toBe('#/lesson/review-1');
+  expect(screen.getByRole('region', { name: '第 1 站複習' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '假裝完美' }));
+  expect(storedProgress()).toEqual({
+    version: 2,
+    completed: [...station1, 'review-1'],
+    perfect: ['review-1'],
+    xp: 130,
+    streak: 1,
+    lastActiveDay: localDayKey(new Date()),
+    soundOn: true,
+  });
+  expect(screen.getByText('130 XP')).toBeInTheDocument();
+  // 複習不是一站的最後一課：完成畫面沒有「看本站重點」
+  expect(screen.queryByRole('button', { name: '看本站重點' })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(window.location.hash).toBe('#/');
+  expect(reviewLink(1)).toHaveTextContent('完美');
+  const next = screen.getByRole('link', { name: /力與加速度/ });
+  expect(next).toHaveTextContent('可以上');
+  expect(next).toHaveAttribute('aria-current', 'step');
+
+  // 上一頁不會重新打開剛做完的複習（回到的是總結頁）
+  await goBack();
+  expect(screen.queryByRole('button', { name: '假裝完美' })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '第 1 站重點：運動' })).toBeInTheDocument();
+});
+
+it('複習沒拿到完美：節點是「已完成」；中途離開：不存檔', async () => {
+  const station1 = lessonIdsOf(1);
+  seedProgress({ version: 2, completed: station1, perfect: [], xp: 100, streak: 1, lastActiveDay: localDayKey(new Date()), soundOn: true });
+  const user = userEvent.setup();
+  render(<App />);
+
+  // 中途離開
+  await user.click(reviewLink(1));
+  await user.click(screen.getByRole('button', { name: '開始複習' }));
+  await user.click(screen.getByRole('button', { name: '假裝離開' }));
+  expect(window.location.hash).toBe('#/');
+  expect(storedProgress()).toMatchObject({ completed: station1, xp: 100 });
+  expect(reviewLink(1)).toHaveTextContent('可以上');
+
+  await user.click(reviewLink(1));
+  await user.click(screen.getByRole('button', { name: '開始複習' }));
+  await user.click(screen.getByRole('button', { name: '假裝上完' }));
+  expect(storedProgress()).toMatchObject({ completed: [...station1, 'review-1'], perfect: [], xp: 115 });
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(reviewLink(1)).toHaveTextContent('已完成');
+  expect(reviewLink(1)).not.toHaveTextContent('完美');
 });

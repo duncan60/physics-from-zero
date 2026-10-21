@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 
-// Hash 路由：`#/` 是地圖，`#/lesson/1-2` 是一課。
+// Hash 路由：`#/` 是地圖，`#/lesson/1-2` 是一課，`#/review/1` 是第 1 站的重點總結（複習本身是一課：`#/lesson/review-1`）。
 // 用 hash 才能在 GitHub Pages 的子路徑底下重新整理頁面（伺服器只看得到 /physics-from-zero/）。
 
-export type Route = { name: 'map' } | { name: 'lesson'; id: string };
+export type Route = { name: 'map' } | { name: 'lesson'; id: string } | { name: 'review'; stationId: number };
 
 const LESSON_HASH = /^#\/lesson\/([^/?#]+)$/;
+// 站號是正整數，不接受 0 開頭（'#/review/01' 和 '#/review/1' 不會變成兩個網址）。
+const REVIEW_HASH = /^#\/review\/([1-9][0-9]*)$/;
 
-/** '#/lesson/1-2' → 那一課；其他情況（空白、'#/'、看不懂的網址、壞掉的編碼）一律回傳地圖。 */
+/**
+ * '#/lesson/1-2' → 那一課；'#/review/1' → 第 1 站的重點總結；
+ * 其他情況（空白、'#/'、看不懂的網址、壞掉的編碼）一律回傳地圖。
+ */
 export function parseHash(hash: string): Route {
+  const review = REVIEW_HASH.exec(hash);
+  if (review !== null) return { name: 'review', stationId: Number(review[1]) };
   const match = LESSON_HASH.exec(hash);
   if (match === null) return { name: 'map' };
   try {
@@ -19,11 +26,19 @@ export function parseHash(hash: string): Route {
 }
 
 export function routeToHash(route: Route): string {
-  return route.name === 'lesson' ? `#/lesson/${encodeURIComponent(route.id)}` : '#/';
+  switch (route.name) {
+    case 'map':
+      return '#/';
+    case 'lesson':
+      return `#/lesson/${encodeURIComponent(route.id)}`;
+    case 'review':
+      return `#/review/${route.stationId}`;
+  }
 }
 
+/** 網址一樣，就是同一頁。 */
 function sameRoute(a: Route, b: Route): boolean {
-  return a.name === b.name && (a.name === 'map' || (b.name === 'lesson' && a.id === b.id));
+  return routeToHash(a) === routeToHash(b);
 }
 
 export interface NavigateOptions {

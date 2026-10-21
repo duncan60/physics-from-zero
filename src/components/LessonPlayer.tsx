@@ -34,6 +34,11 @@ interface Props {
   onComplete: (result: LessonResult) => void;
   /** 中途離開（答過題目的話，要在確認時按「確定離開」），或在完成畫面按「回到地圖」。 */
   onExit: () => void;
+  /**
+   * 有給的話，完成畫面多一個「看本站重點」（主要按鈕，排在「回到地圖」前面），按了呼叫這裡。
+   * App 只在上完一站的最後一課、而且那一站有重點與複習時才給。
+   */
+  onShowStationSummary?: () => void;
   /** 量時間用的時鐘（毫秒），預設 performance.now()；測試換成假的時鐘來控制「花了多久」。 */
   now?: () => number;
 }
@@ -112,9 +117,19 @@ function ExitConfirm(props: { onStay: () => void; onLeave: () => void }): React.
   );
 }
 
-/** 完成畫面：成績，完美時加上「完美！」和彩紙（減少動態效果時不撒彩紙）。 */
-function CompleteView(props: { lesson: Lesson; result: LessonResult; onExit: () => void; guard: (action: () => void) => () => void }): React.JSX.Element {
-  const { lesson, result, onExit, guard } = props;
+/**
+ * 完成畫面：成績，完美時加上「完美！」和彩紙（減少動態效果時不撒彩紙）。
+ * 上完一站的最後一課（有 onShowStationSummary）時，「看本站重點」是主要按鈕：剛上完一站正是整理重點的時候；
+ * 複習不是必要的，「回到地圖」一直都在。
+ */
+function CompleteView(props: {
+  lesson: Lesson;
+  result: LessonResult;
+  onExit: () => void;
+  onShowStationSummary?: () => void;
+  guard: (action: () => void) => () => void;
+}): React.JSX.Element {
+  const { lesson, result, onExit, onShowStationSummary, guard } = props;
   const reducedMotion = useReducedMotion();
   return (
     <section className="lp-player" aria-label={lesson.title}>
@@ -128,7 +143,16 @@ function CompleteView(props: { lesson: Lesson; result: LessonResult; onExit: () 
           <li className="lp-complete-stat lp-complete-stat--time">{`花了 ${formatDuration(result.durationMs)}`}</li>
         </ul>
         <div className="lp-actions">
-          <button type="button" className="lp-button lp-button--primary" onClick={guard(onExit)}>
+          {onShowStationSummary !== undefined && (
+            <button type="button" className="lp-button lp-button--primary" onClick={guard(onShowStationSummary)}>
+              看本站重點
+            </button>
+          )}
+          <button
+            type="button"
+            className={onShowStationSummary === undefined ? 'lp-button lp-button--primary' : 'lp-button'}
+            onClick={guard(onExit)}
+          >
             回到地圖
           </button>
         </div>
@@ -148,7 +172,7 @@ export function LessonPlayer(props: Props): React.JSX.Element {
   return <LessonRun key={props.lesson.id} {...props} />;
 }
 
-function LessonRun({ lesson, onComplete, onExit, now = defaultNow }: Props): React.JSX.Element {
+function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, now = defaultNow }: Props): React.JSX.Element {
   const [index, setIndex] = useState(0);
   const [inGuide, setInGuide] = useState(false);
   // 每從引導回到原題一次就加一，讓原題用新的 key 重新掛載，重新作答。
@@ -245,7 +269,15 @@ function LessonRun({ lesson, onComplete, onExit, now = defaultNow }: Props): Rea
   }
 
   if (step === undefined) {
-    return <CompleteView lesson={lesson} result={{ xp, perfect, accuracy: percent, durationMs }} onExit={onExit} guard={guard} />;
+    return (
+      <CompleteView
+        lesson={lesson}
+        result={{ xp, perfect, accuracy: percent, durationMs }}
+        onExit={onExit}
+        onShowStationSummary={onShowStationSummary}
+        guard={guard}
+      />
+    );
   }
 
   function renderStep(current: Step): React.JSX.Element {

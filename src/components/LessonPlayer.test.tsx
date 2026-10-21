@@ -131,6 +131,8 @@ interface RenderOptions {
   sound?: { enabled: boolean; player: { play(kind: SoundKind): void } };
   /** 假的時鐘（毫秒），用來控制完成畫面上的「花了多久」。 */
   now?: () => number;
+  /** 傳給 LessonPlayer 的 onShowStationSummary（App 只在一站的最後一課傳）。 */
+  onShowStationSummary?: () => void;
 }
 
 function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
@@ -138,7 +140,7 @@ function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
   const onExit = vi.fn();
   const user = userEvent.setup({ delay: SETTLE_MS, advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
   const fast = userEvent.setup({ delay: null });
-  const { strict, sound, now } = options;
+  const { strict, sound, now, onShowStationSummary } = options;
   function Wrapper(props: { children: ReactNode }): React.JSX.Element {
     const inner =
       sound === undefined ? (
@@ -150,7 +152,8 @@ function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
       );
     return strict === true ? <StrictMode>{inner}</StrictMode> : <>{inner}</>;
   }
-  const { rerender, unmount } = render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} now={now} />, {
+  const player = <LessonPlayer lesson={lesson} onComplete={onComplete} onExit={onExit} now={now} onShowStationSummary={onShowStationSummary} />;
+  const { rerender, unmount } = render(player, {
     wrapper: Wrapper,
   });
   return { user, fast, onComplete, onExit, rerender, unmount };
@@ -866,6 +869,47 @@ it('onComplete 收到 { xp, perfect, accuracy, durationMs } 而且只呼叫一�
   expect(screen.getByText('花了 45 秒')).toBeInTheDocument();
   await user.click(button('回到地圖'));
   expect(onComplete).toHaveBeenCalledTimes(1);
+});
+
+it('沒有 onShowStationSummary：完成畫面只有「回到地圖」', async () => {
+  const { user, fast } = renderPlayer(plainLesson);
+  await playPlainLesson(user, fast);
+  expect(queryButton('看本站重點')).not.toBeInTheDocument();
+  expect(button('回到地圖')).toBeInTheDocument();
+});
+
+it('有 onShowStationSummary（一站的最後一課）：完成畫面多一個「看本站重點」，是主要按鈕；「回到地圖」還在', async () => {
+  const onShowStationSummary = vi.fn();
+  const { user, fast, onComplete, onExit } = renderPlayer(plainLesson, { onShowStationSummary });
+  await playPlainLesson(user, fast);
+  expect(onComplete).toHaveBeenCalledTimes(1);
+
+  const summary = button('看本站重點');
+  const back = button('回到地圖');
+  expect(summary).toHaveClass('lp-button--primary');
+  expect(back).not.toHaveClass('lp-button--primary');
+  // 看本站重點在前面
+  expect(summary.compareDocumentPosition(back)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+  // 最後一下「繼續」連點到這裡：還在防連點的時間內，不算數
+  await fast.click(summary);
+  expect(onShowStationSummary).not.toHaveBeenCalled();
+
+  settle();
+  await user.click(button('看本站重點'));
+  expect(onShowStationSummary).toHaveBeenCalledTimes(1);
+  expect(onExit).not.toHaveBeenCalled();
+  expect(onComplete).toHaveBeenCalledTimes(1); // 不會再回報一次
+});
+
+it('有 onShowStationSummary 時，「回到地圖」照樣走 onExit', async () => {
+  const onShowStationSummary = vi.fn();
+  const { user, fast, onExit } = renderPlayer(plainLesson, { onShowStationSummary });
+  await playPlainLesson(user, fast);
+  settle();
+  await user.click(button('回到地圖'));
+  expect(onExit).toHaveBeenCalledTimes(1);
+  expect(onShowStationSummary).not.toHaveBeenCalled();
 });
 
 it('音效關閉時不呼叫 player.play；開啟時答對呼叫 correct', async () => {

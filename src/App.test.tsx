@@ -2,10 +2,10 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-import { stations } from './content/stations';
+import { reviewOf, stations } from './content/stations';
 import { STORAGE_KEY, emptyProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
-import { parseHash } from './lib/router';
+import { parseHash, routeToHash } from './lib/router';
 
 // 這個檔案用真實的課程資料（第 1 站有 5 課，第 2 站有 1 課，其他站還沒有課）。
 
@@ -309,4 +309,221 @@ it('頁尾有署名、授權說明和 GitHub 連結', () => {
   expect(footer).toHaveTextContent('MIT');
   expect(footer).toHaveTextContent('CC BY-SA 4.0');
   expect(within(footer).getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', 'https://github.com/duncan60/physics-from-zero');
+});
+
+// ---- 每站的重點總結與複習 ----
+
+const REVIEW_LOCKED = '本站重點與複習還沒解鎖，先完成這一站的每一課';
+
+/** 這一站所有課程的 id，依課號排序。 */
+function lessonIdsOf(stationId: number): string[] {
+  return stations.find((station) => station.id === stationId)?.lessons.map((lesson) => lesson.id) ?? [];
+}
+
+/** 地圖上的某一站（標題是「第 N 站 站名」）。 */
+function stationRegion(stationId: number): HTMLElement {
+  const station = stations.find((s) => s.id === stationId);
+  if (station === undefined) throw new Error(`沒有第 ${stationId} 站`);
+  return screen.getByRole('region', { name: `第 ${station.id} 站 ${station.title}` });
+}
+
+/** 某一站路線上「本站重點與複習」的那一格（鎖住時不是連結，所以用 listitem 找）。 */
+function reviewItem(stationId: number): HTMLElement {
+  const item = within(stationRegion(stationId)).getByText('本站重點與複習').closest('li');
+  if (item === null) throw new Error(`找不到第 ${stationId} 站的「本站重點與複習」`);
+  return item;
+}
+
+function reviewLink(stationId: number): HTMLElement {
+  return within(stationRegion(stationId)).getByRole('link', { name: /本站重點與複習/ });
+}
+
+const today = (): string => localDayKey(new Date());
+
+it('parseHash／routeToHash：本站重點的網址是 #/review/站號，看不懂的一律回到地圖', () => {
+  expect(parseHash('#/review/1')).toEqual({ name: 'review', stationId: 1 });
+  expect(parseHash('#/review/12')).toEqual({ name: 'review', stationId: 12 });
+  expect(routeToHash({ name: 'review', stationId: 2 })).toBe('#/review/2');
+  expect(parseHash(routeToHash({ name: 'review', stationId: 7 }))).toEqual({ name: 'review', stationId: 7 });
+  for (const hash of ['#/review', '#/review/', '#/review/abc', '#/review/0', '#/review/01', '#/review/-1', '#/review/1.5', '#/review/1/extra']) {
+    expect(parseHash(hash), hash).toEqual({ name: 'map' });
+  }
+  // 複習本身是一課：#/lesson/review-1
+  expect(parseHash('#/lesson/review-1')).toEqual({ name: 'lesson', id: 'review-1' });
+});
+
+it('地圖：有課程、有複習的站，路線的最後一個節點是「本站重點與複習」；課程還沒上完時鎖住', () => {
+  render(<App />);
+  let withReview = 0;
+  for (const station of stations) {
+    const region = stationRegion(station.id);
+    if (station.lessons.length === 0 || reviewOf(station.id) === undefined) {
+      expect(within(region).queryByText('本站重點與複習'), `第 ${station.id} 站`).not.toBeInTheDocument();
+      continue;
+    }
+    withReview += 1;
+    const items = within(region).getAllByRole('listitem');
+    expect(items).toHaveLength(station.lessons.length + 1);
+    const last = items[items.length - 1];
+    expect(last).toBe(reviewItem(station.id));
+    expect(last).toHaveTextContent('鎖住');
+    expect(within(last).queryByRole('link')).not.toBeInTheDocument();
+  }
+  expect(withReview).toBeGreaterThanOrEqual(2); // 第 1 站和第 2 站都有複習
+  expect(screen.getAllByText('本站重點與複習')).toHaveLength(withReview);
+});
+
+it('還沒上完整站：直接打開 #/review/1 或 #/lesson/review-1，都顯示「還沒解鎖」', async () => {
+  // 只差最後一課
+  seedProgress({ ...emptyProgress(), completed: lessonIdsOf(1).slice(0, -1), xp: 40, streak: 1, lastActiveDay: today() });
+  window.location.hash = '#/review/1';
+  const user = userEvent.setup();
+  render(<App />);
+
+  expect(screen.getByRole('heading', { name: REVIEW_LOCKED })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: /第 1 站重點/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '開始複習' })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(window.location.hash).toBe('#/');
+  expect(reviewItem(1)).toHaveTextContent('鎖住');
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+  // 「回到地圖」不留下歷史紀錄
+  await traverse(() => window.history.back());
+  expect(screen.queryByText(REVIEW_LOCKED)).not.toBeInTheDocument();
+
+  window.location.hash = '#/lesson/review-1';
+  expect(await screen.findByRole('heading', { name: REVIEW_LOCKED })).toBeInTheDocument();
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument(); // 沒有開始複習
+  expect(screen.queryByRole('button', { name: '離開' })).not.toBeInTheDocument();
+});
+
+it('網址是不存在的站、或還沒有複習的站：顯示「找不到這一站的重點」', async () => {
+  window.location.hash = '#/review/99';
+  const user = userEvent.setup();
+  render(<App />);
+  expect(screen.getByRole('heading', { name: '找不到這一站的重點' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(window.location.hash).toBe('#/');
+
+  const noReview = stations.find((station) => reviewOf(station.id) === undefined);
+  if (noReview !== undefined) {
+    window.location.hash = `#/review/${noReview.id}`;
+    expect(await screen.findByRole('heading', { name: '找不到這一站的重點' })).toBeInTheDocument();
+  }
+  // 不存在的複習：和不存在的課一樣
+  window.location.hash = '#/lesson/review-99';
+  expect(await screen.findByRole('heading', { name: '找不到這一課' })).toBeInTheDocument();
+});
+
+it('舊存檔（只有課程的完成紀錄）：整站上完，本站重點與複習變成可以上；下一站第一課仍是目前這一課', () => {
+  // 版本 1 的存檔：那時還沒有複習
+  window.localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ version: 1, completed: lessonIdsOf(1), xp: 100, streak: 1, lastActiveDay: today() }),
+  );
+  render(<App />);
+
+  const node = reviewLink(1);
+  expect(node).toHaveTextContent('可以上');
+  expect(node).toHaveAttribute('href', '#/review/1');
+  expect(node).toHaveClass('path-node--available');
+  expect(node).toHaveAccessibleName('第 1 站 本站重點與複習 可以上');
+  // 複習是選擇性的：不搶「目前這一課」，下一站第一課照常解鎖
+  expect(node).not.toHaveAttribute('aria-current');
+  const next = screen.getByRole('link', { name: /力與加速度/ });
+  expect(next).toHaveTextContent('可以上');
+  expect(next).toHaveAttribute('aria-current', 'step');
+  expect(screen.getAllByRole('link', { current: 'step' })).toHaveLength(1);
+  expect(reviewItem(2)).toHaveTextContent('鎖住');
+  // 走到「本站重點與複習」的最後一段路線，畫成走過的樣子
+  const segments = stationRegion(1).querySelectorAll('.path-segment');
+  expect(segments).toHaveLength(lessonIdsOf(1).length);
+  expect(segments[segments.length - 1]).toHaveClass('path-segment--done');
+});
+
+it('做完複習：已完成；全對：完美（金色、星星，和課程一樣）', () => {
+  seedProgress({
+    ...emptyProgress(),
+    completed: [...lessonIdsOf(1), 'review-1', ...lessonIdsOf(2), 'review-2'],
+    perfect: ['review-2'],
+    xp: 300,
+    streak: 1,
+    lastActiveDay: today(),
+  });
+  render(<App />);
+
+  const done = reviewLink(1);
+  expect(done).toHaveTextContent('已完成');
+  expect(done).not.toHaveTextContent('完美');
+  expect(done).toHaveClass('path-node--completed');
+
+  const gold = reviewLink(2);
+  expect(gold).toHaveTextContent('完美');
+  expect(gold).not.toHaveTextContent('已完成');
+  expect(gold).toHaveClass('path-node--perfect');
+  expect(gold).toHaveAttribute('href', '#/review/2');
+
+  // 不只顏色不同：圖示也不一樣
+  const icon = (link: HTMLElement) => link.querySelector('.path-node-circle svg')?.innerHTML;
+  expect(icon(gold)).not.toBe(icon(done));
+});
+
+it('perfect 裡有複習、卻沒有完成（存檔被改過）：不算完美，課程沒上完也打不開', () => {
+  seedProgress({ ...emptyProgress(), completed: ['1-1'], perfect: ['review-1'], xp: 10, streak: 1, lastActiveDay: today() });
+  render(<App />);
+  expect(reviewItem(1)).toHaveTextContent('鎖住');
+  expect(reviewItem(1)).not.toHaveTextContent('完美');
+});
+
+it('做過的複習一定打得開：以後這一站多了一課、還沒上，總結頁也不會變成「還沒解鎖」', () => {
+  // 第 1 站最後一課沒完成，卻做過複習（例如以後第 1 站多了一課）
+  seedProgress({ ...emptyProgress(), completed: [...lessonIdsOf(1).slice(0, -1), 'review-1'], xp: 60, streak: 1, lastActiveDay: today() });
+  window.location.hash = '#/review/1';
+  render(<App />);
+  expect(screen.getByRole('heading', { name: '第 1 站重點：運動' })).toBeInTheDocument();
+  expect(screen.queryByText(REVIEW_LOCKED)).not.toBeInTheDocument();
+});
+
+it('做了複習，下一站第一課照原規則：前一課沒完成就還是鎖住', () => {
+  seedProgress({ ...emptyProgress(), completed: [...lessonIdsOf(1).slice(0, -1), 'review-1'], xp: 60, streak: 1, lastActiveDay: today() });
+  render(<App />);
+  expect(reviewLink(1)).toHaveTextContent('已完成');
+  expect(lessonItem('力與加速度')).toHaveTextContent('鎖住');
+  const last = stations[0].lessons[stations[0].lessons.length - 1];
+  expect(screen.getByRole('link', { name: new RegExp(last.title) })).toHaveAttribute('aria-current', 'step');
+});
+
+it('整站上完：從地圖打開本站重點 → 總結頁；「開始複習」進入複習，上一頁回到總結頁', async () => {
+  seedProgress({ ...emptyProgress(), completed: lessonIdsOf(1), xp: 100, streak: 1, lastActiveDay: today() });
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(reviewLink(1));
+  expect(window.location.hash).toBe('#/review/1');
+  expect(screen.getByRole('heading', { level: 2, name: '第 1 站重點：運動' })).toBeInTheDocument();
+  for (const name of ['重點', '公式', '常見陷阱']) expect(screen.getByRole('region', { name })).toBeInTheDocument();
+  expect(document.activeElement).toBe(screen.getByRole('main')); // 換頁後焦點在主要內容
+  expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
+
+  await user.click(screen.getByRole('button', { name: '開始複習' }));
+  expect(window.location.hash).toBe('#/lesson/review-1');
+  expect(screen.getByRole('region', { name: '第 1 站複習' })).toBeInTheDocument();
+  expect(screen.getByRole('progressbar', { name: '課程進度' })).toBeInTheDocument();
+  // 複習題下方也有「回報問題」
+  expect(screen.getByRole('link', { name: /回報問題/ })).toBeInTheDocument();
+
+  // 上一頁：回到總結頁
+  await traverse(() => window.history.back());
+  expect(window.location.hash).toBe('#/review/1');
+  expect(screen.getByRole('heading', { name: '第 1 站重點：運動' })).toBeInTheDocument();
+
+  // 總結頁的「回到地圖」：取代這一筆，上一頁不會再回到總結頁
+  await user.click(screen.getByRole('button', { name: '回到地圖' }));
+  expect(window.location.hash).toBe('#/');
+  expect(reviewLink(1)).toHaveTextContent('可以上');
+  expect(document.activeElement).toBe(screen.getByRole('main'));
+  await traverse(() => window.history.back());
+  expect(screen.queryByRole('heading', { name: '第 1 站重點：運動' })).not.toBeInTheDocument();
+  expect(reviewLink(1)).toBeInTheDocument();
 });

@@ -751,6 +751,186 @@ a.path-node:active .path-node-circle {
   font-size: 1.25rem;
 }
 
+/* ---- 本站重點總結（components/StationSummary.tsx） ----
+   內容可能很長：三個區塊的標題前都有色條，一眼找得到；每一項是一列，文字可以換行，窄螢幕也不會有水平捲軸。 */
+
+.summary {
+  padding: 16px 0 8px;
+}
+
+.summary-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.summary-lead {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.summary-part {
+  margin-top: 24px;
+}
+
+.summary-part-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 1.1875rem;
+  font-weight: 800;
+}
+
+.summary-part-title::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 1.1em;
+  border-radius: 3px;
+  background-color: var(--primary);
+}
+
+.summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 重點和公式：一張卡片，每一項一列，中間用細線隔開 */
+.summary-points .summary-list,
+.summary-formulas .summary-list {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+}
+
+.summary-point,
+.summary-formula {
+  padding: 10px 14px;
+}
+
+.summary-point + .summary-point,
+.summary-formula + .summary-formula {
+  border-top: 1px solid var(--border);
+}
+
+.summary-points .summary-list {
+  counter-reset: summary-point;
+}
+
+/* 重點前面的編號 */
+.summary-point {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  counter-increment: summary-point;
+}
+
+.summary-point::before {
+  content: counter(summary-point);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background-color: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 0.875rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.summary-formula-name {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* 公式有時是一段文字（例如 g 的數值），一定要能換行 */
+.summary-formula-text {
+  margin: 2px 0 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+/* 常見陷阱：每一個一張卡片，上面是錯的想法（橘色底、叉），下面是正確的想法（綠色、勾）。
+   除了顏色，還有文字標籤和不同的圖示。 */
+.summary-traps .summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-trap {
+  overflow: hidden;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+}
+
+.summary-trap-wrong,
+.summary-trap-right {
+  padding: 10px 14px;
+}
+
+.summary-trap-wrong {
+  background-color: var(--wrong-soft);
+}
+
+.summary-trap-right {
+  border-top: 2px solid var(--border);
+}
+
+.summary-trap-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 2px;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.summary-trap-label::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 18px;
+  -webkit-mask: var(--icon-cross) center / contain no-repeat;
+  mask: var(--icon-cross) center / contain no-repeat;
+  background-color: currentColor;
+}
+
+.summary-trap-wrong .summary-trap-label {
+  color: var(--wrong);
+}
+
+.summary-trap-right .summary-trap-label {
+  color: var(--correct);
+}
+
+.summary-trap-right .summary-trap-label::before {
+  -webkit-mask-image: var(--icon-check);
+  mask-image: var(--icon-check);
+}
+
+.summary-trap-text {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+.summary-actions {
+  margin-top: 28px;
+}
+
 /* ---- 上課：外框、進度條 ---- */
 
 .lp-player {

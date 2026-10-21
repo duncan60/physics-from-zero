@@ -4,9 +4,10 @@ import { Footer } from './components/Footer';
 import { Header } from './components/Header';
 import { LessonPlayer } from './components/LessonPlayer';
 import type { LessonResult } from './components/LessonPlayer';
-import { PathMap, canOpenLesson } from './components/PathMap';
+import { PathMap, canOpenLesson, canOpenReview } from './components/PathMap';
 import { SoundProvider } from './components/SoundContext';
-import { findLesson } from './content/stations';
+import { StationSummary } from './components/StationSummary';
+import { findLesson, isLastLessonOfStation, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './content/stations';
 import {
   STORAGE_KEY,
   completeLesson,
@@ -23,8 +24,18 @@ import { useHashRoute } from './lib/router';
 import type { Route } from './lib/router';
 
 function routeKey(route: Route): string {
-  return route.name === 'lesson' ? `lesson:${route.id}` : 'map';
+  switch (route.name) {
+    case 'map':
+      return 'map';
+    case 'lesson':
+      return `lesson:${route.id}`;
+    case 'review':
+      return `review:${route.stationId}`;
+  }
 }
+
+// 本站重點與複習（總結頁、複習）還沒解鎖時的說明。
+const REVIEW_LOCKED = '本站重點與複習還沒解鎖，先完成這一站的每一課';
 
 /**
  * 換頁時（第一次載入除外）：
@@ -62,7 +73,7 @@ function NoticeIcon(props: { kind: 'missing' | 'locked' }): React.JSX.Element {
   );
 }
 
-/** 找不到課程、課程還沒解鎖時的畫面：一句說明，加上「回到地圖」。 */
+/** 找不到課程、課程還沒解鎖（本站重點也一樣）時的畫面：一句說明，加上「回到地圖」。 */
 function Notice(props: { kind: 'missing' | 'locked'; message: string; onBack: () => void }): React.JSX.Element {
   return (
     <section className="notice">
@@ -126,16 +137,52 @@ export default function App(): React.JSX.Element {
     setProgress(next);
   }
 
+  /**
+   * 上完一站的最後一課時，完成畫面的「看本站重點」：這一站要有重點與複習，而且已經打得開（每一課都上完了；
+   * 完成畫面一出現就存檔，所以剛上完的這一課也算）。和「回到地圖」一樣取代這一筆瀏覽紀錄，上一頁不會重新打開剛上完的課。
+   * 其他情況回傳 undefined，完成畫面就沒有這個按鈕。
+   */
+  function stationSummaryAfter(lessonId: string): (() => void) | undefined {
+    const stationId = stationOf(lessonId);
+    if (stationId === undefined || !isLastLessonOfStation(lessonId) || reviewOf(stationId) === undefined) return undefined;
+    if (!canOpenReview(progress, stationId)) return undefined;
+    return () => navigate({ name: 'review', stationId }, { replace: true });
+  }
+
+  /** #/review/站號：這一站的重點總結；「開始複習」打開複習（新增一筆瀏覽紀錄，上一頁回到總結頁）。 */
+  function renderSummary(stationId: number): React.JSX.Element {
+    const review = reviewOf(stationId);
+    const station = stations.find((s) => s.id === stationId);
+    if (review === undefined || station === undefined) return <Notice kind="missing" message="找不到這一站的重點" onBack={backToMap} />;
+    if (!canOpenReview(progress, stationId)) return <Notice kind="locked" message={REVIEW_LOCKED} onBack={backToMap} />;
+    return (
+      <StationSummary
+        review={review}
+        stationTitle={station.title}
+        onStart={() => navigate({ name: 'lesson', id: reviewLessonId(stationId) })}
+        onBack={backToMap}
+      />
+    );
+  }
+
   function renderPage(): React.JSX.Element {
-    if (route.name === 'map') {
-      return <PathMap progress={progress} onOpen={(id) => navigate({ name: 'lesson', id })} />;
-    }
+    if (route.name === 'map') return <PathMap progress={progress} onOpen={(next) => navigate(next)} />;
+    if (route.name === 'review') return renderSummary(route.stationId);
+    // 一課，或某一站的複習（review-站號）：複習和課程一樣上課、存進度，只是解鎖規則不同（canOpenLesson 會處理）。
     const lesson = findLesson(route.id);
     if (lesson === undefined) return <Notice kind="missing" message="找不到這一課" onBack={backToMap} />;
     if (!canOpenLesson(progress, lesson.id)) {
-      return <Notice kind="locked" message="這一課還沒解鎖，先完成前面的課" onBack={backToMap} />;
+      const message = reviewStationOf(lesson.id) === undefined ? '這一課還沒解鎖，先完成前面的課' : REVIEW_LOCKED;
+      return <Notice kind="locked" message={message} onBack={backToMap} />;
     }
-    return <LessonPlayer lesson={lesson} onComplete={(result) => finishLesson(lesson.id, result)} onExit={backToMap} />;
+    return (
+      <LessonPlayer
+        lesson={lesson}
+        onComplete={(result) => finishLesson(lesson.id, result)}
+        onExit={backToMap}
+        onShowStationSummary={stationSummaryAfter(lesson.id)}
+      />
+    );
   }
 
   return (
