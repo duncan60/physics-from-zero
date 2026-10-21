@@ -221,7 +221,8 @@ it('看到完成畫面就已經存檔：沒按「回到地圖」直接按上一�
   expect(screen.getByText(`${gained} XP`)).toBeInTheDocument();
 });
 
-it('依序上完每一課（每一題都第一次就答對）：每一課都會完成，並解鎖下一課', async () => {
+// 每多一課，這個測試就跑得更久；GitHub Actions 的機器比本機慢，預設的 5 秒不夠。
+it('依序上完每一課（每一題都第一次就答對）：每一課都會完成，並解鎖下一課', { timeout: 60_000 }, async () => {
   const user = setupUser();
   render(<App />);
   let totalXp = 0;
