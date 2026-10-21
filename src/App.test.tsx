@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
+import { stations } from './content/stations';
 import { STORAGE_KEY, emptyProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
 import { parseHash } from './lib/router';
@@ -63,7 +64,7 @@ it('parseHash', () => {
   expect(parseHash('#/lesson/%E4')).toEqual({ name: 'map' }); // 壞掉的編碼
 });
 
-it('地圖：第一課可以上，第二課鎖住，第 2 站的課鎖住，第 3 站即將推出', () => {
+it('地圖：第一課可以上，第二課鎖住，第 2 站的課鎖住，第一個還沒有課的站即將推出', () => {
   render(<App />);
 
   const first = screen.getByRole('link', { name: /慣性/ });
@@ -83,9 +84,13 @@ it('地圖：第一課可以上，第二課鎖住，第 2 站的課鎖住，第 
   expect(within(station2).queryByText('即將推出')).not.toBeInTheDocument();
   expect(within(station2).getByText('力與加速度').closest('li')).toHaveTextContent('鎖住');
   expect(within(station2).queryByRole('link')).not.toBeInTheDocument();
-  const station3 = screen.getByRole('region', { name: /能量與動量/ });
-  expect(within(station3).getByText('即將推出')).toBeInTheDocument();
-  expect(within(station3).queryByRole('link')).not.toBeInTheDocument();
+  // 哪一站還沒有課，隨著新增課程改變：看第一個沒有課的站；每一站都有課了，就沒有這項要檢查
+  const emptyStation = stations.find((station) => station.lessons.length === 0);
+  if (emptyStation !== undefined) {
+    const region = screen.getByRole('region', { name: new RegExp(emptyStation.title) });
+    expect(within(region).getByText('即將推出')).toBeInTheDocument();
+    expect(within(region).queryByRole('link')).not.toBeInTheDocument();
+  }
   // 7 站都有標題
   expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(7);
 });
