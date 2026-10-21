@@ -23,6 +23,18 @@ describe('parseNumberInput', () => {
   ])('分數無法解析：%s', (raw) => expect(parseNumberInput(raw)).toBeNull());
 });
 
+describe('parseNumberInput：不接受分數（拼算式的第 2 步，要自己算出答案）', () => {
+  const NO_FRACTION = { allowFraction: false };
+  it.each(['18/6', '1/2', '１８／６', '−1/2', '0.5/2', '1 / 2'])('分數不算數字：%s', (raw) => expect(parseNumberInput(raw, NO_FRACTION)).toBeNull());
+  it.each([['3', 3], [' 18 ', 18], ['１８', 18], ['-2', -2], ['−2', -2], ['+3', 3], ['2.5', 2.5], ['０．５', 0.5]])('一般的數字照常：%s → %s', (raw, n) =>
+    expect(parseNumberInput(raw, NO_FRACTION)).toBe(n));
+  it('預設（沒給選項、或 allowFraction: true）仍然接受分數', () => {
+    expect(parseNumberInput('1/2')).toBe(0.5);
+    expect(parseNumberInput('1/2', {})).toBe(0.5);
+    expect(parseNumberInput('1/2', { allowFraction: true })).toBe(0.5);
+  });
+});
+
 describe('hasUnitAfterNumber（數字後面多打了單位）', () => {
   it.each(['10公尺', '10 公尺', '2 m/s', '-10 公尺/秒', '−2m/s²', '１０公尺', '3 秒後', '9.8m/s2', '10.公尺', '25°', '25 ℃'])('算：%s', (raw) =>
     expect(hasUnitAfterNumber(raw)).toBe(true),
@@ -52,6 +64,17 @@ describe('checkNumber', () => {
     expect(checkNumber(step, '６／２')).toEqual({ correct: true });
     expect(checkNumber({ ...step, answer: 0.33, tolerance: 0.01 }, '1/3')).toEqual({ correct: true });
     expect(checkNumber({ ...step, answer: 0.5, wrongAnswers: [] }, '1/0')).toBe('invalid');
+  });
+  it('allowFraction: false：18/6 不算數字（invalid），不能跳過計算；3 和 3.0 照常算對，其他仍然判錯', () => {
+    const answer18 = { ...step, answer: 3, wrongAnswers: [{ value: 6, feedback: '用了相加' }] };
+    const NO_FRACTION = { allowFraction: false };
+    expect(checkNumber(answer18, '18/6', NO_FRACTION)).toBe('invalid');
+    expect(checkNumber(answer18, '１８／６', NO_FRACTION)).toBe('invalid');
+    expect(checkNumber(answer18, '3', NO_FRACTION)).toEqual({ correct: true });
+    expect(checkNumber(answer18, '3.0', NO_FRACTION)).toEqual({ correct: true });
+    expect(checkNumber(answer18, '6', NO_FRACTION)).toEqual({ correct: false, feedback: '用了相加' });
+    expect(checkNumber(answer18, '5', NO_FRACTION)).toEqual({ correct: false });
+    expect(checkNumber(answer18, '18/6')).toEqual({ correct: true }); // 沒給選項：數字題照舊接受分數
   });
   it('容許誤差的兩端都算對（1 ± 0.1）', () => {
     const s = { ...step, answer: 1, tolerance: 0.1 };

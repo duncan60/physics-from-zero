@@ -627,11 +627,12 @@ function conceptText(lessonId: string, stepId: string): string {
   return step.body.join('');
 }
 
-it('2-1 牛頓第二定律的觀念卡：F 是合力，說明合力是所有力加起來、方向相反的會抵消', () => {
+it('2-1 牛頓第二定律的觀念卡：F 是合力，說明合力是所有力加起來、方向相反的要相減（不說「抵消」，免得讀成完全消掉）', () => {
   const text = conceptText('2-1', 'newton-second');
   expect(text).toContain('合力 = 質量 × 加速度');
   expect(text).toContain('F 是合力');
-  expect(text).toContain('抵消');
+  expect(text).toContain('方向相反的要相減');
+  expect(text).not.toContain('抵消');
   expect(text).not.toMatch(/(?<!合)力 = 質量 × 加速度/);
 });
 
@@ -677,6 +678,7 @@ it('地球的 g：說約 9.8、這裡取 10，課程和複習都不說「地球�
 it('1-5 平均速度的觀念卡：先下定義「走了多遠 ÷ 花了多久」，再說速度均勻地變時才是（一開始 + 最後）÷ 2', () => {
   const text = conceptText('1-5', 'average-speed');
   expect(text).toContain('走了多遠 ÷ 花了多久');
+  expect(text).toContain('一路往同一個方向'); // 轉彎、折返時平均速度不是這樣算
   expect(text).toContain('每一秒都變一樣多');
   expect(text.indexOf('走了多遠')).toBeLessThan(text.indexOf('（一開始的速度 + 最後的速度）÷ 2'));
 });
@@ -690,11 +692,15 @@ it('1-4 介紹正負號的重力觀念卡，也說明速度和速率的差別；
   expect(findLesson('1-4')?.steps).toHaveLength(8);
 });
 
-it('2-2 購物車停下來的主角：輪子和地面、輪軸之間的摩擦和阻力，選項 id 仍然是 friction', () => {
+it('2-2 購物車停下來的主角：選項 id 仍然是 friction，選項字數和其他選項差不多（不靠長度猜答案），輪軸的詳細說法放在說明裡', () => {
   const step = findStep('2-2', 'which-force');
   if (step?.kind !== 'choice') throw new Error('which-force 不是選擇題');
   expect(step.answer).toBe('friction');
-  expect(step.options.find((o) => o.id === 'friction')?.label).toContain('輪軸');
+  const correct = step.options.find((o) => o.id === 'friction');
+  expect(correct?.label).toBe('輪子受到的摩擦');
+  const longestOther = Math.max(...step.options.filter((o) => o.id !== 'friction').map((o) => o.label.length));
+  expect(correct?.label.length ?? Infinity).toBeLessThanOrEqual(longestOther * 2);
+  expect(step.explanation).toContain('輪子和地面、輪軸之間的摩擦和阻力');
 });
 
 it('2-1 的兩題倍數題只加了「假設沒有摩擦力」：答案、單位、順序都沒變', () => {

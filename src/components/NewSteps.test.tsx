@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SoundKind } from '../lib/sound';
-import type { FormulaStep, Lesson, MatchStep, QuestionStep, SliderStep } from '../lib/types';
+import type { FormulaStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
 import { MatchCard } from './MatchCard';
 import { QuestionCard } from './QuestionCard';
@@ -921,6 +921,61 @@ it('拼算式：引導結束回到原題（算式已拼好、鎖定在第 2 步�
   expect(screen.getByText('正確答案')).toBeInTheDocument();
   expect(screen.getByText('( 18 − 0 ) ÷ 6')).toBeInTheDocument();
   expect(screen.getByText(NOTE)).toBeInTheDocument();
+});
+
+it('拼算式第 2 步：不接受分數（20/20 不能代替算出答案 1）→ 只提示「請算出答案，填一個數字」，不算答錯、不算一次檢查', async () => {
+  const onCheck = vi.fn();
+  const user = setupUser();
+  const onFinish = vi.fn();
+  render(<QuestionCard step={formulaStep} onFinish={onFinish} onCheck={onCheck} />);
+
+  const input = await solveFormula(user);
+  expect(onCheck.mock.calls).toEqual([['partial']]);
+  for (const raw of ['20/20', '２０／２０', '2 / 2', '1/1']) {
+    await user.clear(input);
+    await user.type(input, raw);
+    await user.click(button('檢查'));
+    expect(screen.getByText('請算出答案，填一個數字'), raw).toBeInTheDocument();
+    expect(input).toHaveAccessibleDescription('公尺/秒² 請算出答案，填一個數字'); // 單位加上提示
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByText('只要填數字，不用寫單位'), raw).not.toBeInTheDocument();
+    expect(screen.queryByText('還不對'), raw).not.toBeInTheDocument();
+    expect(screen.queryByText('答對了'), raw).not.toBeInTheDocument();
+  }
+  expect(onCheck.mock.calls).toEqual([['partial']]); // 只是提示，沒有算作一次檢查
+
+  // 改成算出來的數字：仍然是第一次就答對
+  await user.clear(input);
+  await user.type(input, '1');
+  await user.click(button('檢查'));
+  expect(onCheck.mock.calls).toEqual([['partial'], ['correct']]);
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+  expect(onFinish).toHaveBeenCalledWith(true);
+});
+
+it('拼算式第 2 步：小數照常接受（0.5 這類）；數字題（不是拼算式）仍然接受分數', async () => {
+  const halfStep: FormulaStep = { ...formulaStep, id: 'half', answer: 0.5, wrongAnswers: [], explanation: '10 ÷ 20 = 0.5。', accepted: [['10', '÷', '20']] };
+  const user = setupUser();
+  const { unmount } = render(<QuestionCard step={halfStep} onFinish={vi.fn()} />);
+  await build(user, ['10', '÷', '20']);
+  await user.click(button('檢查'));
+  const input = screen.getByRole('textbox', { name: /第 2 步：算出答案/ });
+  await user.type(input, '1/2');
+  await user.click(button('檢查'));
+  expect(screen.getByText('請算出答案，填一個數字')).toBeInTheDocument();
+  await user.clear(input);
+  await user.type(input, '0.5');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  unmount();
+
+  const numberStep: NumberStep = { kind: 'number', id: 'half-number', prompt: '一半是多少？', answer: 0.5, explanation: '1 ÷ 2 = 0.5。' };
+  render(<QuestionCard step={numberStep} onFinish={vi.fn()} />);
+  await user.type(screen.getByRole('textbox'), '1/2');
+  await user.click(button('檢查'));
+  expect(screen.queryByText('請算出答案，填一個數字')).not.toBeInTheDocument();
+  expect(screen.getByText('答對了')).toBeInTheDocument();
 });
 
 it('拼算式：onCheck 告訴外面這次檢查的結果（算式拼對是 partial，答案對了才是 correct）', async () => {

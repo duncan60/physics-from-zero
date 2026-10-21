@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber } from '../lib/answer';
+import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber, parseNumberInput } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
 import { acceptedNote, checkFormula, parseFormula } from '../lib/formula';
 import { checkSlider } from '../lib/slider';
@@ -17,6 +17,8 @@ type Phase = 'answering' | 'correct' | 'wrong' | 'revealed';
 
 const NEED_NUMBER = '請先輸入數字';
 const NUMBER_ONLY = '只要填數字，不用寫單位';
+// 拼算式的第 2 步不接受分數（18/6）：要自己算出答案，填一個數字。
+const NEED_ANSWER_NUMBER = '請算出答案，填一個數字';
 const NEED_CHOICE = '請先選一個答案';
 const NEED_FORMULA = '請先拼出算式';
 const NEED_SLIDE = '請先拉動滑桿';
@@ -142,7 +144,7 @@ export function QuestionCard(props: {
         return checked.result;
       }
       case 'formula': {
-        if (formulaDone) return checkNumber(step, numberRaw);
+        if (formulaDone) return checkNumber(step, numberRaw, { allowFraction: false }); // 要自己算出答案，不接受「18/6」
         // 什麼都沒放才是「請先拼出算式」；拼錯、亂拼都算答錯，亂拼的另外說明是哪裡沒拼完。
         if (placed.length === 0) return 'invalid';
         const tokens = placed.map((tile) => step.tiles[tile]);
@@ -160,7 +162,9 @@ export function QuestionCard(props: {
         return NEED_CHOICE;
       case 'formula':
         if (!formulaDone) return NEED_FORMULA;
-        return hasUnitAfterNumber(numberRaw) ? NUMBER_ONLY : NEED_NUMBER; // 第 2 步和數字題一樣
+        // 第 2 步和數字題一樣；不同的是分數（18/6）也被擋下來，要說清楚是請他算出答案。
+        if (parseNumberInput(numberRaw) !== null) return NEED_ANSWER_NUMBER;
+        return hasUnitAfterNumber(numberRaw) ? NUMBER_ONLY : NEED_NUMBER;
       case 'number':
         return hasUnitAfterNumber(numberRaw) ? NUMBER_ONLY : NEED_NUMBER;
       case 'table':

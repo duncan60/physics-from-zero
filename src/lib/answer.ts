@@ -19,17 +19,23 @@ const UNSIGNED_NUMBER = String.raw`\d+(?:\.\d+)?`;
 // 正負號只寫在最前面（整個數字或整個分數）；分數是兩個不帶正負號的數字，中間一條斜線（兩側可以有空白）。
 const NUMBER_OR_FRACTION = new RegExp(String.raw`^([+-]?)(${UNSIGNED_NUMBER})(?:\s*/\s*(${UNSIGNED_NUMBER}))?$`);
 
+export interface NumberParseOptions {
+  /** 接受分數 a/b。預設 true；拼算式的第 2 步要自己算出答案，不能用「18/6」代替 3，所以傳 false。 */
+  allowFraction?: boolean;
+}
+
 /**
  * 解析使用者輸入的數字；無法解析時回傳 null。
  * 接受整數、小數（全形也可以），以及簡單的分數 a/b（例如「1/2」「−１／２」「0.5/2」），值是 a ÷ b。
- * 分母是 0 算不出數字，也是 null。
+ * 分母是 0 算不出數字，也是 null。`allowFraction: false` 時分數一律是 null。
  */
-export function parseNumberInput(raw: string): number | null {
+export function parseNumberInput(raw: string, { allowFraction = true }: NumberParseOptions = {}): number | null {
   const match = NUMBER_OR_FRACTION.exec(toHalfWidth(raw).trim());
   if (match === null) return null;
   const [, sign, numerator, denominator] = match;
   let magnitude = Number(numerator);
   if (denominator !== undefined) {
+    if (!allowFraction) return null;
     const divisor = Number(denominator);
     if (divisor === 0) return null;
     magnitude /= divisor;
@@ -60,8 +66,12 @@ export function checkChoice(step: ChoiceStep, optionId: string): CheckResult {
 }
 
 /** 拼算式的第 2 步也用這個判斷，所以只要求數字題判斷會用到的欄位（FormulaStep 也有）。 */
-export function checkNumber(step: Pick<NumberStep, 'answer' | 'tolerance' | 'wrongAnswers'>, raw: string): CheckResult | 'invalid' {
-  const value = parseNumberInput(raw);
+export function checkNumber(
+  step: Pick<NumberStep, 'answer' | 'tolerance' | 'wrongAnswers'>,
+  raw: string,
+  options?: NumberParseOptions,
+): CheckResult | 'invalid' {
+  const value = parseNumberInput(raw, options);
   if (value === null) return 'invalid';
   if (isClose(value, step.answer, step.tolerance)) return { correct: true };
   const known = step.wrongAnswers?.find((wrong) => isClose(value, wrong.value));
