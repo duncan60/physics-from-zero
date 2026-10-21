@@ -2103,6 +2103,34 @@ a.path-node:active .path-node-circle {
   margin: 0;
 }
 
+/* 拼算式：算式算對、但寫法省略了什麼時的提醒。中性的提示（資訊色），不是「答對了」的成功樣式。
+   也是 role="status" 的即時區域，空的時候一樣留在畫面上、不佔空間。 */
+.lp-note {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-left: 4px solid var(--info-border);
+  border-radius: var(--radius);
+  background-color: var(--info-soft);
+}
+
+.lp-note:empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lp-note-title {
+  margin: 0 0 2px;
+  color: var(--info);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.lp-note-text {
+  margin: 0;
+  line-height: 1.7;
+}
+
 .lp-feedback {
   margin: 0;
 }

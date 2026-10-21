@@ -805,98 +805,122 @@ it('LessonPlayer：配對配過一次之後按「離開」，要先確認', asyn
   expect(onExit).not.toHaveBeenCalled();
 });
 
-// ---- 算對、但寫法省略了什麼（acceptedNotes）：在「答對了」下面輕輕提醒正式寫法，不影響對錯、第一次就對、XP ----
+// ---- 算對、但寫法省略了什麼（acceptedNotes）：在算式下面輕輕提醒正式寫法。
+// 中性的提示，不說「答對了」（第 2 步還沒做完）；不影響對錯、第一次就對、XP ----
 
-it('拼算式：拼成省略 − 0 的 18 ÷ 6 → 算對，「答對了」下面有提醒；兩步都第一次就對，仍然是 onFinish(true)', async () => {
+/** 提醒所在的即時區域（role="status"，一直在畫面上，沒有提醒時是空的）。 */
+const noteRegion = (container: HTMLElement) => container.querySelector<HTMLElement>('.lp-note');
+
+it('拼算式：拼成省略 − 0 的 18 ÷ 6 → 算式算對，下面出現中性的「提醒」，不說「答對了」；兩步都第一次就對，仍然是 onFinish(true)', async () => {
   const onCheck = vi.fn();
   const onFinish = vi.fn();
   const user = setupUser();
-  render(<QuestionCard step={noteStep} onFinish={onFinish} onCheck={onCheck} />);
+  const { container } = render(<QuestionCard step={noteStep} onFinish={onFinish} onCheck={onCheck} />);
+  const region = noteRegion(container);
+  expect(region).toBeInTheDocument();
+  expect(region).toHaveAttribute('role', 'status');
+  expect(region).toBeEmptyDOMElement(); // 一開始是空的：即時區域先在畫面上，內容出現時才會念
 
   await build(user, ['18', '÷', '6']);
   expect(screen.queryByText(NOTE)).not.toBeInTheDocument(); // 按「檢查」之前不會有
   await user.click(button('檢查'));
-  // 第 1 步算對了：進到第 2 步，答對了加上提醒（不是「還不對」）
+  // 第 1 步算對了：進到第 2 步；提醒是中性的提示，題目還沒結束，所以不是「答對了」，也不是「還不對」
   expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
-  expect(screen.getByText('答對了')).toBeInTheDocument();
   expect(screen.getByText(NOTE)).toBeInTheDocument();
+  expect(region).toHaveTextContent(`提醒${NOTE}`);
+  expect(screen.queryByText('答對了')).not.toBeInTheDocument();
   expect(screen.queryByText('還不對')).not.toBeInTheDocument();
   expect(onCheck.mock.calls).toEqual([['partial']]);
+  const noteText = screen.getByText(NOTE);
 
-  // 第 2 步答對：提醒還在「答對了」下面，連同原本的說明
+  // 第 2 步答對：「答對了」和說明出現，提醒還在（同一個區域、同一段文字，不會重念一次）
   await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '3');
   await user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
-  expect(screen.getByText(NOTE)).toBeInTheDocument();
   expect(screen.getByText(noteStep.explanation)).toBeInTheDocument();
+  expect(noteRegion(container)).toBe(region);
+  expect(screen.getByText(NOTE)).toBe(noteText);
   expect(onCheck.mock.calls).toEqual([['partial'], ['correct']]);
   expect(onFinish).not.toHaveBeenCalled();
   await user.click(button('繼續'));
   expect(onFinish).toHaveBeenCalledWith(true);
 });
 
-it('拼算式：拼成正式寫法 (18 − 0) ÷ 6 → 沒有提醒（第 1 步、答對之後都沒有）', async () => {
-  const { user, onFinish } = renderCard(noteStep);
+it('拼算式：拼成正式寫法 (18 − 0) ÷ 6 → 沒有提醒，第 1 步算對也沒有任何訊息', async () => {
+  const onFinish = vi.fn();
+  const user = setupUser();
+  const { container } = render(<QuestionCard step={noteStep} onFinish={onFinish} />);
   await build(user, ['(', '18', M, '0', ')', '÷', '6']);
   await user.click(button('檢查'));
   expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
   expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
-  expect(screen.queryByText('答對了')).not.toBeInTheDocument(); // 第 1 步算對沒有額外的訊息，和以前一樣
+  expect(screen.queryByText('提醒')).not.toBeInTheDocument();
+  expect(noteRegion(container)).toBeEmptyDOMElement();
+  expect(screen.queryByText('答對了')).not.toBeInTheDocument();
 
   await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '3');
   await user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
   expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  expect(noteRegion(container)).toBeEmptyDOMElement();
   await user.click(button('繼續'));
   expect(onFinish).toHaveBeenCalledWith(true);
 });
 
-it('拼算式：提醒只出現在「答對了」：第 2 步答錯時換成「還不對」、沒有提醒，再試一次後提醒回來；這題不再算第一次就對', async () => {
-  const { user, onFinish } = renderCard(noteStep);
+it('拼算式：第 2 步答錯、再試一次的過程中，提醒一直都在、也不重新出現；這題不再算第一次就對', async () => {
+  const onFinish = vi.fn();
+  const user = setupUser();
+  const { container } = render(<QuestionCard step={noteStep} onFinish={onFinish} />);
   await build(user, ['18', '÷', '6']);
   await user.click(button('檢查'));
+  const noteText = screen.getByText(NOTE);
   const input = screen.getByRole('textbox', { name: /第 2 步：算出答案/ });
   await user.type(input, '18');
   await user.click(button('檢查'));
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText('還要除以時間。')).toBeInTheDocument();
-  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
   expect(screen.queryByText('答對了')).not.toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBe(noteText);
 
   await user.click(button('再試一次'));
-  expect(screen.getByText(NOTE)).toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBe(noteText);
   await user.clear(input);
   await user.type(input, '3');
   await user.click(button('檢查'));
-  expect(screen.getByText(NOTE)).toBeInTheDocument();
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBe(noteText);
+  expect(noteRegion(container)).toHaveTextContent(NOTE);
   await user.click(button('繼續'));
   expect(onFinish).toHaveBeenCalledWith(false);
 });
 
 it('拼算式：算式沒算對（已知錯誤、不認得的算式）沒有提醒，只有「還不對」', async () => {
-  const { user } = renderCard(noteStep);
+  const user = setupUser();
+  const { container } = render(<QuestionCard step={noteStep} onFinish={vi.fn()} />);
   await build(user, ['18', M, '0', '÷', '6']);
   await user.click(button('檢查'));
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText('先算除法，再相減。')).toBeInTheDocument();
   expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  expect(noteRegion(container)).toBeEmptyDOMElement();
   expect(screen.queryByText('答對了')).not.toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: '第 2 步：算出答案' })).not.toBeInTheDocument();
 });
 
-it('拼算式：引導結束回到原題（算式已拼好、鎖定在第 2 步）時，省略 − 0 的提醒還在；看解答顯示的是正式寫法', async () => {
+it('拼算式：引導結束回到原題（算式已拼好、鎖定在第 2 步）時，省略 − 0 的提醒還在；看解答時一樣在，正確答案顯示正式寫法', async () => {
   // tiles 的索引：18 是 2、÷ 是 6、6 是 1
   const user = setupUser();
   render(<QuestionCard step={noteStep} onFinish={vi.fn()} builtFormula={[2, 6, 1]} />);
   expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
   expect(screen.getByText(NOTE)).toBeInTheDocument();
+  expect(screen.queryByText('答對了')).not.toBeInTheDocument();
 
   await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '18');
   await user.click(button('檢查'));
   await user.click(button('看解答'));
   expect(screen.getByText('正確答案')).toBeInTheDocument();
   expect(screen.getByText('( 18 − 0 ) ÷ 6')).toBeInTheDocument();
-  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBeInTheDocument();
 });
 
 it('拼算式：onCheck 告訴外面這次檢查的結果（算式拼對是 partial，答案對了才是 correct）', async () => {
