@@ -965,3 +965,121 @@ it('一步一步來裡的題目也有音效；回到原題時不會彈跳', asyn
   expect(player.kinds()).toEqual(['wrong', 'wrong', 'correct', 'correct']);
   expect(stage()).toHaveClass('lp-bounce');
 });
+
+// ---- 回報問題連結 ----
+
+/** 目前畫面上唯一的「回報問題」連結，帶的是哪一步（從網址的 body 讀出步驟 id 和題型）。 */
+function reportedStep(): { id: string | undefined; kind: string | undefined } {
+  const link = screen.getByRole('link', { name: /回報問題/ }); // 不只一個就會拋錯：每一步只能有一個
+  const body = new URL(link.getAttribute('href') ?? '').searchParams.get('body') ?? '';
+  return { id: /步驟：(.+)/.exec(body)?.[1], kind: /題型：(.+)/.exec(body)?.[1] };
+}
+
+it('每一步下方都有「回報問題」連結，帶的是那一步的 id；一步一步來裡的步驟用它自己的 id', async () => {
+  const { user } = renderPlayer(guidedLesson);
+
+  // 觀念卡
+  expect(reportedStep()).toEqual({ id: 'intro', kind: 'concept' });
+  await user.click(button('繼續'));
+
+  // 有引導的選擇題：答錯前、答錯後都在
+  expect(reportedStep()).toEqual({ id: 'pick', kind: 'choice' });
+  await user.click(screen.getByRole('radio', { name: '選項 B' }));
+  await user.click(button('檢查'));
+  expect(reportedStep()).toEqual({ id: 'pick', kind: 'choice' });
+
+  // 一步一步來裡的題目：用引導步驟自己的 id，而且只有一個連結（不會和原題各一個）
+  await user.click(button('一步一步來'));
+  expect(reportedStep()).toEqual({ id: 'pick-guide', kind: 'number' });
+  await user.type(textbox('2 + 2 是多少？'), '4');
+  await user.click(button('檢查'));
+  expect(reportedStep()).toEqual({ id: 'pick-guide', kind: 'number' });
+  await user.click(button('繼續'));
+
+  // 回到原題，再到下一題
+  expect(reportedStep()).toEqual({ id: 'pick', kind: 'choice' });
+  await user.click(screen.getByRole('radio', { name: '選項 C' }));
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(reportedStep()).toEqual({ id: 'count', kind: 'number' });
+});
+
+it('一步一步來裡的觀念卡也有連結，帶引導步驟自己的 id', async () => {
+  const lesson: Lesson = {
+    id: 'test-guide-concept',
+    title: '測試引導觀念卡',
+    steps: [
+      {
+        kind: 'number',
+        id: 'main',
+        prompt: '5 − 2 是多少？',
+        answer: 3,
+        explanation: '5 − 2 = 3。',
+        guide: [
+          { kind: 'concept', id: 'main-hint', body: ['先想想看有幾個。'] },
+          { kind: 'choice', id: 'main-pick', prompt: '5 比 2 多還是少？', options: [{ id: 'a', label: '多' }, { id: 'b', label: '少' }], answer: 'a', explanation: '多。' },
+        ],
+      },
+    ],
+  };
+  const { user } = renderPlayer(lesson);
+  await user.type(textbox('5 − 2 是多少？'), '9');
+  await user.click(button('檢查'));
+  await user.click(button('一步一步來'));
+  expect(reportedStep()).toEqual({ id: 'main-hint', kind: 'concept' });
+  await user.click(button('繼續'));
+  expect(reportedStep()).toEqual({ id: 'main-pick', kind: 'choice' });
+});
+
+it('動畫、配對、表格也有連結；完成畫面沒有', async () => {
+  const lesson: Lesson = {
+    id: 'test-kinds',
+    title: '測試各種題型',
+    steps: [
+      { kind: 'sim', id: 'bus', sim: 'bus-ball', prompt: '動手試試看。' },
+      {
+        kind: 'match',
+        id: 'pair-up',
+        prompt: '配成一對',
+        pairs: [
+          { left: '甲', right: '一' },
+          { left: '乙', right: '二' },
+          { left: '丙', right: '三' },
+        ],
+        explanation: '都配好了。',
+      },
+      tableLesson.steps[0],
+    ],
+  };
+  const { user } = renderPlayer(lesson);
+
+  expect(reportedStep()).toEqual({ id: 'bus', kind: 'sim' });
+  await user.click(button('繼續'));
+
+  expect(reportedStep()).toEqual({ id: 'pair-up', kind: 'match' });
+  for (const pair of [{ left: '甲', right: '一' }, { left: '乙', right: '二' }, { left: '丙', right: '三' }]) {
+    await user.click(button(pair.left));
+    await user.click(button(pair.right));
+  }
+  expect(reportedStep()).toEqual({ id: 'pair-up', kind: 'match' }); // 配完了，說明出現後還在
+  await user.click(button('繼續'));
+
+  expect(reportedStep()).toEqual({ id: 'speeds', kind: 'table' });
+  const inputs = screen.getAllByRole('textbox');
+  await user.type(inputs[0], '8');
+  await user.type(inputs[1], '6');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument();
+});
+
+it('確認離開時，連結和這一步一起藏起來', async () => {
+  const { user } = renderPlayer(plainLesson);
+  await user.click(screen.getByRole('radio', { name: '選項 A' }));
+  await user.click(button('檢查'));
+  expect(screen.getByRole('link', { name: /回報問題/ })).toBeVisible();
+  await user.click(button('離開'));
+  expect(screen.queryByRole('link', { name: /回報問題/ })).not.toBeInTheDocument(); // 藏起來的東西不在無障礙樹裡
+});

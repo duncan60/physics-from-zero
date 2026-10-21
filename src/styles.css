@@ -931,6 +931,33 @@ a.path-node:active .path-node-circle {
   flex: 1 1 140px;
 }
 
+/* ---- 回報問題：每一步卡片下方的小連結（次要，所以是小字、灰色；但點擊範圍高度 44px，寫在元素上） ---- */
+
+.lp-report {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.lp-report-link {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 4px;
+  margin-inline: -4px; /* 加了左右的點擊範圍，文字還是和卡片對齊 */
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+@media (hover: hover) {
+  .lp-report-link:hover {
+    color: var(--text);
+  }
+}
+
 /* ---- 確認離開 ---- */
 
 .lp-leave {

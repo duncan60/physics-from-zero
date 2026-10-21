@@ -7,6 +7,7 @@ import { Confetti } from './Confetti';
 import { GuideRunner } from './GuideRunner';
 import { MatchCard } from './MatchCard';
 import { QuestionCard } from './QuestionCard';
+import { ReportLink } from './ReportLink';
 import { useSound } from './SoundContext';
 import { ConceptView } from './steps/ConceptView';
 import { useActionGuard } from './useActionGuard';
@@ -261,7 +262,16 @@ function LessonRun({ lesson, onComplete, onExit, now = defaultNow }: Props): Rea
       case 'table':
       case 'formula':
       case 'slider':
-        if (inGuide) return <GuideRunner steps={current.guide ?? []} onDone={finishGuide} onCheck={handleGuideCheck} />;
+        if (inGuide) {
+          return (
+            <GuideRunner
+              steps={current.guide ?? []}
+              onDone={finishGuide}
+              onCheck={handleGuideCheck}
+              report={{ lessonId: lesson.id, lessonTitle: lesson.title }}
+            />
+          );
+        }
         return (
           <QuestionCard step={current} onFinish={finishQuestion} onRequestGuide={startGuide} onCheck={handleCheck} />
         );
@@ -310,6 +320,8 @@ function LessonRun({ lesson, onComplete, onExit, now = defaultNow }: Props): Rea
         hidden={confirmingExit}
       >
         {renderStep(step)}
+        {/* 每一步卡片的下方都有「回報問題」；引導裡的步驟由 GuideRunner 放它自己的（用引導步驟自己的 id）。 */}
+        {!inGuide && <ReportLink lessonId={lesson.id} lessonTitle={lesson.title} stepId={step.id} stepKind={step.kind} />}
       </div>
     </section>
   );

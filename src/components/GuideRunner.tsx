@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CheckOutcome, GuideStep } from '../lib/types';
 import { QuestionCard } from './QuestionCard';
+import { ReportLink } from './ReportLink';
 import { ConceptView } from './steps/ConceptView';
 
 /** 換步驟時把焦點移到新的步驟上，鍵盤和螢幕閱讀器使用者不會停在已經消失的按鈕上。 */
@@ -12,9 +13,15 @@ function focusOnMount(element: HTMLElement | null): void {
  * 依序跑完引導步驟，最後呼叫 `onDone()`。
  * 引導裡的題目不會再有引導（內容測試保證），這裡也不傳 `onRequestGuide`，答錯只會有「再試一次」和「看解答」。
  * `onCheck(outcome)`：引導裡的題目每次「檢查」的結果（LessonPlayer 用來播音效）。
+ * `report`：有給的話，每個引導步驟下方都有「回報問題」，帶的是引導步驟自己的 id 和題型（引導裡的步驟也會有錯字）。
  */
-export function GuideRunner(props: { steps: GuideStep[]; onDone: () => void; onCheck?: (outcome: CheckOutcome) => void }): React.JSX.Element {
-  const { steps, onDone, onCheck } = props;
+export function GuideRunner(props: {
+  steps: GuideStep[];
+  onDone: () => void;
+  onCheck?: (outcome: CheckOutcome) => void;
+  report?: { lessonId: string; lessonTitle: string };
+}): React.JSX.Element {
+  const { steps, onDone, onCheck, report } = props;
   const [index, setIndex] = useState(0);
   const step = steps[index] as GuideStep | undefined;
 
@@ -33,6 +40,7 @@ export function GuideRunner(props: { steps: GuideStep[]; onDone: () => void; onC
       {step !== undefined && (
         <div key={index} ref={focusOnMount} tabIndex={-1} className="lp-guide-step">
           {step.kind === 'concept' ? <ConceptView step={step} onContinue={next} /> : <QuestionCard step={step} onFinish={next} onCheck={onCheck} />}
+          {report !== undefined && <ReportLink lessonId={report.lessonId} lessonTitle={report.lessonTitle} stepId={step.id} stepKind={step.kind} />}
         </div>
       )}
     </section>
