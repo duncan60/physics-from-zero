@@ -139,3 +139,13 @@ export function checkFormula(step: FormulaStep, tokens: string[]): CheckResult {
   const known = step.wrongForms?.find((wrong) => formulaKey(wrong.tokens) === key);
   return known ? { correct: false, feedback: known.feedback } : { correct: false };
 }
+
+/**
+ * 算對、而且是 `acceptedNotes` 列出的寫法（省略了什麼的非正式寫法）時，回傳那則提醒；其他情況都是 null。
+ * 一樣用 `sameFormula` 比對，所以 × 兩邊對調、多餘的括號都算同一個寫法。
+ * 提醒只是多一句話，不改變對錯：算對與否仍然只看 `checkFormula`；沒算對的算式就算列在 acceptedNotes 裡也不會有提醒。
+ */
+export function acceptedNote(step: FormulaStep, tokens: string[]): string | null {
+  if (!checkFormula(step, tokens).correct) return null;
+  return step.acceptedNotes?.find((entry) => sameFormula(tokens, entry.tokens))?.note ?? null;
+}

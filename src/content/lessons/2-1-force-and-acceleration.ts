@@ -40,7 +40,7 @@ const forceAndAcceleration: Lesson = {
     {
       kind: 'number',
       id: 'double-mass',
-      prompt: '滿車的質量是空車的 2 倍，用一樣大的力推，滿車的加速度是空車的幾倍？',
+      prompt: '滿車的質量是空車的 2 倍，用一樣大的力推（假設沒有摩擦力），滿車的加速度是空車的幾倍？',
       answer: 0.5,
       unit: '倍',
       wrongAnswers: [
@@ -58,7 +58,7 @@ const forceAndAcceleration: Lesson = {
     {
       kind: 'number',
       id: 'match-accel',
-      prompt: '想讓滿車的加速度和空車一樣大，推的力要變成原來的幾倍？',
+      prompt: '想讓滿車的加速度和空車一樣大（假設沒有摩擦力），推的力要變成原來的幾倍？',
       answer: 2,
       unit: '倍',
       wrongAnswers: [

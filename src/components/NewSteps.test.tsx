@@ -27,6 +27,25 @@ const formulaStep: FormulaStep = {
   explanation: '20 ÷ 20 = 1，加速度是 1 公尺/秒²。',
 };
 
+/** 一開始是 0：(18 − 0) ÷ 6 和省略「− 0」的 18 ÷ 6 都算對，省略的寫法要提醒正式寫法。 */
+const NOTE = '正式寫法是 (18 − 0) ÷ 6：最後 − 一開始。一開始剛好是 0，才可以省略。';
+const noteStep: FormulaStep = {
+  kind: 'formula',
+  id: 'scooter-from-rest',
+  prompt: '一台機車從靜止開始加速，6 秒後速度達到每秒 18 公尺。它的加速度是多少？',
+  tiles: ['0', '6', '18', '+', M, '×', '÷', '(', ')'],
+  accepted: [
+    ['(', '18', M, '0', ')', '÷', '6'],
+    ['18', '÷', '6'],
+  ],
+  acceptedNotes: [{ tokens: ['18', '÷', '6'], note: NOTE }],
+  wrongForms: [{ tokens: ['18', M, '0', '÷', '6'], feedback: '先算除法，再相減。' }],
+  answer: 3,
+  unit: '公尺/秒²',
+  wrongAnswers: [{ value: 18, feedback: '還要除以時間。' }],
+  explanation: '(18 − 0) ÷ 6 = 3 公尺/秒²。',
+};
+
 /** 有括號和四種符號的拼算式：(6 + 18) ÷ 2 = 12。 */
 const bracketStep: FormulaStep = {
   kind: 'formula',
@@ -784,6 +803,100 @@ it('LessonPlayer：配對配過一次之後按「離開」，要先確認', asyn
   await user.click(button('離開'));
   expect(screen.getByRole('alertdialog', { name: '要離開這一課嗎？' })).toBeInTheDocument();
   expect(onExit).not.toHaveBeenCalled();
+});
+
+// ---- 算對、但寫法省略了什麼（acceptedNotes）：在「答對了」下面輕輕提醒正式寫法，不影響對錯、第一次就對、XP ----
+
+it('拼算式：拼成省略 − 0 的 18 ÷ 6 → 算對，「答對了」下面有提醒；兩步都第一次就對，仍然是 onFinish(true)', async () => {
+  const onCheck = vi.fn();
+  const onFinish = vi.fn();
+  const user = setupUser();
+  render(<QuestionCard step={noteStep} onFinish={onFinish} onCheck={onCheck} />);
+
+  await build(user, ['18', '÷', '6']);
+  expect(screen.queryByText(NOTE)).not.toBeInTheDocument(); // 按「檢查」之前不會有
+  await user.click(button('檢查'));
+  // 第 1 步算對了：進到第 2 步，答對了加上提醒（不是「還不對」）
+  expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBeInTheDocument();
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+  expect(onCheck.mock.calls).toEqual([['partial']]);
+
+  // 第 2 步答對：提醒還在「答對了」下面，連同原本的說明
+  await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '3');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBeInTheDocument();
+  expect(screen.getByText(noteStep.explanation)).toBeInTheDocument();
+  expect(onCheck.mock.calls).toEqual([['partial'], ['correct']]);
+  expect(onFinish).not.toHaveBeenCalled();
+  await user.click(button('繼續'));
+  expect(onFinish).toHaveBeenCalledWith(true);
+});
+
+it('拼算式：拼成正式寫法 (18 − 0) ÷ 6 → 沒有提醒（第 1 步、答對之後都沒有）', async () => {
+  const { user, onFinish } = renderCard(noteStep);
+  await build(user, ['(', '18', M, '0', ')', '÷', '6']);
+  await user.click(button('檢查'));
+  expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
+  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  expect(screen.queryByText('答對了')).not.toBeInTheDocument(); // 第 1 步算對沒有額外的訊息，和以前一樣
+
+  await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '3');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  await user.click(button('繼續'));
+  expect(onFinish).toHaveBeenCalledWith(true);
+});
+
+it('拼算式：提醒只出現在「答對了」：第 2 步答錯時換成「還不對」、沒有提醒，再試一次後提醒回來；這題不再算第一次就對', async () => {
+  const { user, onFinish } = renderCard(noteStep);
+  await build(user, ['18', '÷', '6']);
+  await user.click(button('檢查'));
+  const input = screen.getByRole('textbox', { name: /第 2 步：算出答案/ });
+  await user.type(input, '18');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText('還要除以時間。')).toBeInTheDocument();
+  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  expect(screen.queryByText('答對了')).not.toBeInTheDocument();
+
+  await user.click(button('再試一次'));
+  expect(screen.getByText(NOTE)).toBeInTheDocument();
+  await user.clear(input);
+  await user.type(input, '3');
+  await user.click(button('檢查'));
+  expect(screen.getByText(NOTE)).toBeInTheDocument();
+  await user.click(button('繼續'));
+  expect(onFinish).toHaveBeenCalledWith(false);
+});
+
+it('拼算式：算式沒算對（已知錯誤、不認得的算式）沒有提醒，只有「還不對」', async () => {
+  const { user } = renderCard(noteStep);
+  await build(user, ['18', M, '0', '÷', '6']);
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText('先算除法，再相減。')).toBeInTheDocument();
+  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  expect(screen.queryByText('答對了')).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: '第 2 步：算出答案' })).not.toBeInTheDocument();
+});
+
+it('拼算式：引導結束回到原題（算式已拼好、鎖定在第 2 步）時，省略 − 0 的提醒還在；看解答顯示的是正式寫法', async () => {
+  // tiles 的索引：18 是 2、÷ 是 6、6 是 1
+  const user = setupUser();
+  render(<QuestionCard step={noteStep} onFinish={vi.fn()} builtFormula={[2, 6, 1]} />);
+  expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
+  expect(screen.getByText(NOTE)).toBeInTheDocument();
+
+  await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '18');
+  await user.click(button('檢查'));
+  await user.click(button('看解答'));
+  expect(screen.getByText('正確答案')).toBeInTheDocument();
+  expect(screen.getByText('( 18 − 0 ) ÷ 6')).toBeInTheDocument();
+  expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
 });
 
 it('拼算式：onCheck 告訴外面這次檢查的結果（算式拼對是 partial，答案對了才是 correct）', async () => {

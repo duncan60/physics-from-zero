@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCells } from '../lib/answer';
-import { checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib/formula';
+import { acceptedNote, checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
 import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
@@ -92,6 +92,23 @@ function assertFormula(s: FormulaStep): void {
   const traps = s.tiles.length - s.accepted[0].length;
   expect(traps, `${s.id}：陷阱磚塊有 ${traps} 個`).toBeGreaterThanOrEqual(2);
   expect(traps, `${s.id}：陷阱磚塊有 ${traps} 個`).toBeLessThanOrEqual(4);
+
+  // 算對、但寫法省略了什麼（例如省略「+ 0」）時的提醒：必須是 accepted 裡的某一種寫法，而且不能是正式寫法（accepted 的第一個）。
+  // 否則提醒永遠不會出現，或是正式寫法也被提醒「正式寫法是……」。
+  const notes = s.acceptedNotes ?? [];
+  for (const [i, { tokens: noteTokens, note }] of notes.entries()) {
+    const shown = noteTokens.join(' ');
+    expect(parseFormula(noteTokens), `${s.id}：提醒的算式「${shown}」不合法`).not.toBeNull();
+    expect(
+      s.accepted.some((accepted) => sameFormula(noteTokens, accepted)),
+      `${s.id}：提醒的算式「${shown}」不是 accepted 裡的任何一種寫法，提醒永遠不會出現`,
+    ).toBe(true);
+    expect(sameFormula(noteTokens, s.accepted[0]), `${s.id}：提醒的算式「${shown}」就是正式寫法（accepted 的第一個），不需要提醒`).toBe(false);
+    expect(note.trim(), `${s.id}：「${shown}」的提醒是空的`).not.toBe('');
+    for (const earlier of notes.slice(0, i)) {
+      expect(sameFormula(noteTokens, earlier.tokens), `${s.id}：提醒的算式「${shown}」重複，後面那則提醒不會出現`).toBe(false);
+    }
+  }
 
   const wrongForms = s.wrongForms ?? [];
   for (const [i, wrong] of wrongForms.entries()) {
@@ -290,6 +307,61 @@ it.each([
   const step = findStep(lessonId, stepId);
   if (step?.kind !== 'formula') throw new Error(`${stepId} 不是拼算式`);
   expect(checkFormula(step, tokens(formula))).toEqual({ correct: true });
+});
+
+// 省略 0 的寫法算對，但要輕輕提醒正式寫法是什麼、為什麼這題可以省略；正式寫法（含 + 兩側對調）不需要提醒。
+it.each([
+  ['1-3', 'scooter-from-rest', '18 ÷ 6', '( 18 − 0 ) ÷ 6'],
+  ['1-5', 'bus-slide', '10 ÷ 2 × 5', '( 10 + 0 ) ÷ 2 × 5'],
+  ['1-5', 'bus-slide', '5 × 10 ÷ 2', '( 10 + 0 ) ÷ 2 × 5'],
+  ['1-5', 'bus-slide', '10 × 5 ÷ 2', '( 10 + 0 ) ÷ 2 × 5'],
+] as const)('%s 的 %s：省略 0 的「%s」有提醒，說明正式寫法是「%s」', (lessonId, stepId, formula, formal) => {
+  const step = findStep(lessonId, stepId);
+  if (step?.kind !== 'formula') throw new Error(`${stepId} 不是拼算式`);
+  const note = acceptedNote(step, tokens(formula));
+  expect(note, `「${formula}」沒有提醒`).not.toBeNull();
+  // 提醒裡寫的是正式寫法的樣子：磚塊用空白隔開，提醒裡的數字和符號用一般的寫法（括號貼著數字）。
+  expect(note, formula).toContain(formal.replace('( ', '(').replace(' )', ')'));
+  expect(note, formula).toMatch(/\+ 0|− 0|省略/);
+  expect(acceptedNote(step, tokens(formal))).toBeNull();
+});
+
+it.each([
+  ['1-3', 'scooter-from-rest', '( 18 − 0 ) ÷ 6'],
+  ['1-5', 'bus-slide', '( 10 + 0 ) ÷ 2 × 5'],
+  ['1-5', 'bus-slide', '( 0 + 10 ) ÷ 2 × 5'],
+  ['1-5', 'bus-slide', '5 × ( 10 + 0 ) ÷ 2'],
+  ['1-5', 'bus-slide', '( 10 + 0 ) × 5 ÷ 2'],
+] as const)('%s 的 %s：正式寫法「%s」不需要提醒', (lessonId, stepId, formula) => {
+  const step = findStep(lessonId, stepId);
+  if (step?.kind !== 'formula') throw new Error(`${stepId} 不是拼算式`);
+  expect(checkFormula(step, tokens(formula))).toEqual({ correct: true });
+  expect(acceptedNote(step, tokens(formula))).toBeNull();
+});
+
+it('1-motion 複習的 pitch-height：省略 + 0 的寫法算對，有提醒，正式寫法是 (30 + 0) ÷ 2 × 3', () => {
+  const step = reviewOf(1)?.steps.find((s) => s.id === 'pitch-height');
+  if (step?.kind !== 'formula') throw new Error('pitch-height 不是拼算式');
+  for (const formula of ['30 ÷ 2 × 3', '3 × 30 ÷ 2', '30 × 3 ÷ 2']) {
+    expect(checkFormula(step, tokens(formula)), formula).toEqual({ correct: true });
+    expect(acceptedNote(step, tokens(formula)), formula).toContain('(30 + 0) ÷ 2 × 3');
+  }
+  for (const formula of ['( 30 + 0 ) ÷ 2 × 3', '3 × ( 30 + 0 ) ÷ 2', '( 0 + 30 ) ÷ 2 × 3']) {
+    expect(checkFormula(step, tokens(formula)), formula).toEqual({ correct: true });
+    expect(acceptedNote(step, tokens(formula)), formula).toBeNull();
+  }
+});
+
+// accepted 裡寫出 0 的寫法是完整的寫法，不需要提醒；省略 0 的寫法一個都不能漏掉提醒。
+it('1-3 scooter-from-rest、1-5 bus-slide、1-motion pitch-height：省略 0 的寫法一個都沒漏掉提醒', () => {
+  const steps = [findStep('1-3', 'scooter-from-rest'), findStep('1-5', 'bus-slide'), reviewOf(1)?.steps.find((s) => s.id === 'pitch-height')];
+  for (const step of steps) {
+    if (step?.kind !== 'formula') throw new Error('不是拼算式');
+    for (const accepted of step.accepted) {
+      const dropsZero = !accepted.includes('0');
+      expect(acceptedNote(step, accepted) !== null, `${step.id}：「${accepted.join(' ')}」${dropsZero ? '省略了 0，要有提醒' : '是完整的寫法，不該有提醒'}`).toBe(dropsZero);
+    }
+  }
 });
 
 it.each([
@@ -563,8 +635,8 @@ it('2-1 牛頓第二定律的觀念卡：F 是合力，說明合力是所有力�
   expect(text).not.toMatch(/(?<!合)力 = 質量 × 加速度/);
 });
 
-it('2-1 的購物車算式題（滑桿、拼算式）都說明假設沒有摩擦力', () => {
-  for (const id of ['empty-cart-force', 'full-cart-accel']) {
+it('2-1 的購物車題（兩題倍數題、滑桿、拼算式）都說明假設沒有摩擦力', () => {
+  for (const id of ['double-mass', 'match-accel', 'empty-cart-force', 'full-cart-accel']) {
     const step = findStep('2-1', id);
     expect(step && 'prompt' in step ? step.prompt : '', id).toContain('沒有摩擦力');
   }
@@ -623,4 +695,17 @@ it('2-2 購物車停下來的主角：輪子和地面、輪軸之間的摩擦和
   if (step?.kind !== 'choice') throw new Error('which-force 不是選擇題');
   expect(step.answer).toBe('friction');
   expect(step.options.find((o) => o.id === 'friction')?.label).toContain('輪軸');
+});
+
+it('2-1 的兩題倍數題只加了「假設沒有摩擦力」：答案、單位、順序都沒變', () => {
+  const steps = findLesson('2-1')?.steps ?? [];
+  const ids = steps.map((s) => s.id);
+  expect(ids.indexOf('double-mass')).toBeGreaterThan(ids.indexOf('mass'));
+  expect(ids.indexOf('match-accel')).toBe(ids.indexOf('double-mass') + 1);
+  for (const [id, answer] of [['double-mass', 0.5], ['match-accel', 2]] as const) {
+    const step = findStep('2-1', id);
+    if (step?.kind !== 'number') throw new Error(`${id} 不是數字題`);
+    expect(step.answer, id).toBe(answer);
+    expect(step.unit, id).toBe('倍');
+  }
 });

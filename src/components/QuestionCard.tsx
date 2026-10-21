@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
-import { checkFormula, parseFormula } from '../lib/formula';
+import { acceptedNote, checkFormula, parseFormula } from '../lib/formula';
 import { checkSlider } from '../lib/slider';
 import type { CheckOutcome, QuestionStep } from '../lib/types';
 import { CartAnim } from './sims/CartAnim';
@@ -102,6 +102,10 @@ export function QuestionCard(props: {
   const guard = useActionGuard(`${phase}:${formulaDone}`);
 
   const answering = phase === 'answering';
+  // 拼算式：算式算對、但寫法省略了什麼（例如省略 + 0）時，在「答對了」下面輕輕提醒正式寫法。
+  // 從引導回來、算式已經放在答案列上時也看得到。只是多一句話，不改變對錯、也不影響「第一次就答對」。
+  const formulaNote = step.kind === 'formula' && formulaDone ? acceptedNote(step, placed.map((tile) => step.tiles[tile])) : null;
+  const showNote = formulaNote !== null && (answering || phase === 'correct');
   const requestGuide = step.guide !== undefined && step.guide.length > 0 ? onRequestGuide : undefined;
 
   // 檢查之後，焦點移到主要按鈕（從輸入框按 Enter 檢查時，輸入框會被停用）。
@@ -342,11 +346,12 @@ export function QuestionCard(props: {
       <p id={hintId} className="lp-hint" role="status">
         {hint}
       </p>
-      <div className={answering ? 'lp-feedback' : `lp-feedback lp-feedback--${phase}`} role="status">
-        {phase === 'correct' && (
+      <div className={answering && !showNote ? 'lp-feedback' : `lp-feedback lp-feedback--${answering ? 'correct' : phase}`} role="status">
+        {(phase === 'correct' || showNote) && (
           <>
             <p className="lp-feedback-title">答對了</p>
-            <p className="lp-explanation">{step.explanation}</p>
+            {showNote && <p className="lp-feedback-text">{formulaNote}</p>}
+            {phase === 'correct' && <p className="lp-explanation">{step.explanation}</p>}
           </>
         )}
         {phase === 'wrong' && (

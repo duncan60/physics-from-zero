@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkFormula, evaluateFormula, parseFormula, sameFormula } from './formula';
+import { acceptedNote, checkFormula, evaluateFormula, parseFormula, sameFormula } from './formula';
 import type { FormulaStep } from './types';
 
 const M = '−'; // U+2212，磚塊上的減號
@@ -185,4 +185,48 @@ describe('checkFormula', () => {
     const broken: FormulaStep = { ...step, accepted: [['6', '+']], wrongForms: [{ tokens: ['6', '+'], feedback: '不該出現' }] };
     expect(checkFormula(broken, ['6', '+'])).toStrictEqual({ correct: false });
   });
+});
+
+describe('acceptedNote（算對、但寫法省略了什麼時的提醒）', () => {
+  const informal = ['10', '÷', '2', '×', '5'];
+  const step: FormulaStep = {
+    kind: 'formula',
+    id: 'bus-slide',
+    prompt: '',
+    tiles: ['10', '0', '2', '5', '+', M, '×', '÷', '(', ')'],
+    accepted: [['(', '10', '+', '0', ')', '÷', '2', '×', '5'], informal],
+    acceptedNotes: [{ tokens: informal, note: '正式寫法是 (10 + 0) ÷ 2 × 5' }],
+    answer: 25,
+    explanation: '',
+  };
+
+  it('算對、而且是列了提醒的寫法 → 回傳那則提醒', () => expect(acceptedNote(step, informal)).toBe('正式寫法是 (10 + 0) ÷ 2 × 5'));
+
+  it('正式寫法（accepted 的第一個）沒有提醒', () =>
+    expect(acceptedNote(step, ['(', '10', '+', '0', ')', '÷', '2', '×', '5'])).toBeNull());
+
+  it('提醒也用 sameFormula 比對：× 兩邊對調、多餘的括號都一樣', () => {
+    const swapped: FormulaStep = { ...step, accepted: [...step.accepted, ['5', '×', '10', '÷', '2']], acceptedNotes: [{ tokens: ['5', '×', '10', '÷', '2'], note: '提醒' }] };
+    expect(acceptedNote(swapped, ['10', '×', '5', '÷', '2'])).toBe('提醒');
+    expect(acceptedNote(swapped, ['(', '5', '×', '10', ')', '÷', '2'])).toBe('提醒');
+  });
+
+  it('沒有算對的算式不會有提醒：就算 acceptedNotes 列了它（內容寫壞了，也不能因此變成「答對了」）', () => {
+    const wrong = ['10', '×', '5'];
+    const broken: FormulaStep = { ...step, acceptedNotes: [{ tokens: wrong, note: '不該出現' }] };
+    expect(checkFormula(broken, wrong)).toStrictEqual({ correct: false });
+    expect(acceptedNote(broken, wrong)).toBeNull();
+  });
+
+  it('不合法的拼法、空的拼法都沒有提醒', () => {
+    for (const tokens of [[], ['10', '÷', '2', '×'], ['10', '5']]) expect(acceptedNote(step, tokens)).toBeNull();
+  });
+
+  it('沒有列 acceptedNotes 的題目：沒有提醒，算對的結果也不變', () => {
+    const { acceptedNotes: _unused, ...bare } = step;
+    expect(acceptedNote(bare, informal)).toBeNull();
+    expect(checkFormula(bare, informal)).toEqual({ correct: true });
+  });
+
+  it('有提醒的寫法一樣算對、不帶回饋（只是多一則提醒，不改變對錯）', () => expect(checkFormula(step, informal)).toStrictEqual({ correct: true }));
 });
