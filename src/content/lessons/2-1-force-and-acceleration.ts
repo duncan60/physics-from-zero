@@ -3,7 +3,7 @@
 // 重力加速度和第 1 站一樣用 10 公尺/秒²，往上為正。
 import type { Lesson } from '../../lib/types';
 
-export const forceAndAcceleration: Lesson = {
+const forceAndAcceleration: Lesson = {
   id: '2-1',
   title: '力與加速度',
   steps: [
@@ -203,3 +203,5 @@ export const forceAndAcceleration: Lesson = {
     },
   ],
 };
+
+export default forceAndAcceleration;

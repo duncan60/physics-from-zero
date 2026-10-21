@@ -3,7 +3,7 @@
 // 只講「讓東西滑著慢下來的摩擦力，和滑動方向相反」，不說「摩擦力永遠和運動方向相反」（靜摩擦力可以往前推）。
 import type { Lesson } from '../../lib/types';
 
-export const friction: Lesson = {
+const friction: Lesson = {
   id: '2-2',
   title: '東西為什麼會停下來',
   steps: [
@@ -169,3 +169,5 @@ export const friction: Lesson = {
     },
   ],
 };
+
+export default friction;

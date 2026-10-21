@@ -3,7 +3,7 @@
 // 兩個力一樣大、方向相反、同時出現，推在不同的東西上，所以不會抵消；力一樣大時，質量小的加速度大（a = F ÷ m）。
 import type { Lesson } from '../../lib/types';
 
-export const actionReaction: Lesson = {
+const actionReaction: Lesson = {
   id: '2-3',
   title: '作用力與反作用力',
   steps: [
@@ -182,3 +182,5 @@ export const actionReaction: Lesson = {
     },
   ],
 };
+
+export default actionReaction;

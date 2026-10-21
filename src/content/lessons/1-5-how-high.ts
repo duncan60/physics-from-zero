@@ -11,7 +11,7 @@ const ADD_FIRST =
 const SUBTRACTED_ZERO =
   '最後的速度是 0，減掉 0 不會改變數字，所以算出來的數字碰巧對。平均速度要找兩個速度的正中間，括號裡該用哪個符號？';
 
-export const howHigh: Lesson = {
+const howHigh: Lesson = {
   id: '1-5',
   title: '球飛了多高',
   steps: [
@@ -224,3 +224,5 @@ export const howHigh: Lesson = {
     },
   ],
 };
+
+export default howHigh;

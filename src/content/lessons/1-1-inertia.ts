@@ -2,7 +2,7 @@
 // 數字和公車與球的模擬一致：公車每秒 10 公尺，球在空中 1 秒，煞車後第 1 秒公車走 6 公尺，球落在前方 4 公尺。
 import type { Lesson } from '../../lib/types';
 
-export const inertia: Lesson = {
+const inertia: Lesson = {
   id: '1-1',
   title: '慣性',
   steps: [
@@ -131,3 +131,5 @@ export const inertia: Lesson = {
     },
   ],
 };
+
+export default inertia;

@@ -4,7 +4,7 @@ import { checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
 import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step } from '../lib/types';
-import { findLesson, orderedLessonIds, stations } from './stations';
+import { findLesson, isLastLessonOfStation, orderedLessonIds, stationOf, stations } from './stations';
 
 const lessons = stations.flatMap((s) => s.lessons);
 
@@ -168,27 +168,32 @@ function findStep(lessonId: string, stepId: string): Step | undefined {
   return findLesson(lessonId)?.steps.find((s) => s.id === stepId);
 }
 
-it('有 7 站，第 1 站有 5 課', () => {
-  expect(stations).toHaveLength(7);
-  expect(stations[0].lessons.map((l) => l.id)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5']);
-});
-
-it('第 2 站有 4 課', () => {
-  expect(stations[1].lessons.map((l) => l.id)).toEqual(['2-1', '2-2', '2-3', '2-4']);
-});
-
-it('各站的 id 和標題依照 spec 的順序，只有第 1、2 站有課程', () => {
+// 課程是自動從 lessons/ 讀進來的，新增一課不用改這裡；以下只檢查「至少有」哪些課，不寫死總共有幾課。
+it('有 7 站，id 和標題依照 spec 的順序', () => {
   expect(stations.map((s) => s.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   expect(stations.map((s) => s.title)).toEqual(['運動', '力與牛頓定律', '能量與動量', '波動、聲音與熱', '電與磁', '光', '近代物理']);
-  expect(stations.slice(2).every((s) => s.lessons.length === 0)).toBe(true);
 });
 
-it('第 1 站的課程標題', () => {
-  expect(stations[0].lessons.map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高']);
+it('第 1 站至少有 1-1～1-5，依序排在最前面', () => {
+  expect(stations[0].lessons.map((l) => l.id).slice(0, 5)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5']);
 });
 
-it('第 2 站的課程標題', () => {
-  expect(stations[1].lessons.map((l) => l.title)).toEqual(['力與加速度', '東西為什麼會停下來', '作用力與反作用力', '質量和重量']);
+it('第 2 站至少有 2-1～2-4，依序排在最前面', () => {
+  expect(stations[1].lessons.map((l) => l.id).slice(0, 4)).toEqual(['2-1', '2-2', '2-3', '2-4']);
+});
+
+it('每一站的課程 id 都是「站號-課號」，課號從 1 開始連續；沒有課程的站就是空的（地圖上顯示即將推出）', () => {
+  for (const station of stations) {
+    expect(station.lessons.map((l) => l.id), `第 ${station.id} 站`).toEqual(station.lessons.map((_, i) => `${station.id}-${i + 1}`));
+  }
+});
+
+it('第 1 站的課程標題（前 5 課）', () => {
+  expect(stations[0].lessons.slice(0, 5).map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高']);
+});
+
+it('第 2 站的課程標題（前 4 課）', () => {
+  expect(stations[1].lessons.slice(0, 4).map((l) => l.title)).toEqual(['力與加速度', '東西為什麼會停下來', '作用力與反作用力', '質量和重量']);
 });
 
 it('orderedLessonIds 與各站課程一致', () => expect(orderedLessonIds).toEqual(lessons.map((l) => l.id)));
@@ -208,6 +213,27 @@ it('findLesson 用 id 找到課程，找不到時回傳 undefined', () => {
   expect(findLesson('1-3')?.title).toBe('加速度');
   expect(findLesson('9-9')).toBeUndefined();
   expect(findLesson('')).toBeUndefined();
+});
+
+it('stationOf：每一課都回傳它所在的那一站，找不到這一課時回傳 undefined', () => {
+  for (const station of stations) {
+    for (const lesson of station.lessons) expect(stationOf(lesson.id), lesson.id).toBe(station.id);
+  }
+  expect(stationOf('1-3')).toBe(1);
+  expect(stationOf('2-1')).toBe(2);
+  expect(stationOf('9-9')).toBeUndefined();
+  expect(stationOf('')).toBeUndefined();
+});
+
+it('isLastLessonOfStation：只有每一站的最後一課是 true，找不到這一課時是 false', () => {
+  for (const station of stations) {
+    for (const [index, lesson] of station.lessons.entries()) {
+      expect(isLastLessonOfStation(lesson.id), lesson.id).toBe(index === station.lessons.length - 1);
+    }
+  }
+  expect(isLastLessonOfStation('1-1')).toBe(false);
+  expect(isLastLessonOfStation('9-9')).toBe(false);
+  expect(isLastLessonOfStation('')).toBe(false);
 });
 
 it('1-1 的公車與球模擬緊接在急煞車題之後，讓學習者動手驗證兩題', () => {

@@ -4,7 +4,7 @@
 // 水平推只看質量，這只在沒有摩擦力時成立，所以題目都保留「沒有摩擦力」這個條件。
 import type { Lesson } from '../../lib/types';
 
-export const massAndWeight: Lesson = {
+const massAndWeight: Lesson = {
   id: '2-4',
   title: '質量和重量',
   steps: [
@@ -234,3 +234,5 @@ export const massAndWeight: Lesson = {
     },
   ],
 };
+
+export default massAndWeight;

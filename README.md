@@ -30,17 +30,17 @@ npm run build   # 檢查型別並打包到 dist/
 
 ## 新增一課
 
-課程都是 `src/content/lessons/` 底下的 TypeScript 檔案，不用改畫面的程式碼。
+課程都是 `src/content/lessons/` 底下的 TypeScript 檔案，不用改畫面的程式碼，也不用改 `stations.ts` 或任何測試。**新增一課只要新增一個檔案**，網站和測試會自動讀到它。
 
-1. 在 `src/content/lessons/` 新增一個檔案，例如 `1-6-my-lesson.ts`，匯出一個 `Lesson`（可以參考 `1-2-speed-position.ts`）。
-2. 在 `src/content/stations.ts` 匯入它，放進對應那一站的 `lessons`。
-3. 執行 `npm test`。`src/content/content.test.ts` 會幫你檢查：
+1. 在 `src/content/lessons/` 新增一個檔案，檔名是 `站-課-英文名稱.ts`，例如 `1-6-my-lesson.ts`（第 1 站的第 6 課）。英文名稱只能用小寫英文、數字和連字號。
+2. 檔案裡用 `export default` 匯出一個 `Lesson`（可以參考 `1-2-speed-position.ts`），`id` 要和檔名開頭一樣，這個例子是 `'1-6'`。
+3. 課號要從 1 開始、連續，不能跳號：每一站的課依課號排序，上課和解鎖都照這個順序。所以第 1 站的第 6 課，要等 1-1 到 1-5 都在。第 3 站以後的第一課就是 `3-1-英文名稱.ts`，加了之後那一站就不再顯示「即將推出」。
+4. 執行 `npm test`。檔名和 `id` 對不上、課號跳號、`id` 重複、檔名格式不對，測試會直接失敗（網站也打不開），訊息裡會寫出是哪個檔案；測試沒過就不會部署。`src/content/content.test.ts` 也會把下面這些檢查套在每一課上：
    - 每課 5 到 8 個步驟，步驟 id 不重複。
    - 每一題都答得出來（選擇題的答案是其中一個選項，數字題的錯誤答案不會被判成正確）。
    - 每一題都有說明，觀念卡不超過 150 個字元。
    - 引導裡面不能再有引導，表格的空格答案不能是負數（需要負數就改用數字題）。
    - 不放 emoji。
-4. 測試裡有幾項寫死了目前有哪些課（站數、第 1、2 站的課程 id 與標題、第 3 站以後都是空的）。新增一課時，把 `content.test.ts` 裡對應的期望值一起改掉。
 
 ### 步驟的種類
 
@@ -59,7 +59,7 @@ npm run build   # 檢查型別並打包到 dist/
 ```ts
 import type { Lesson } from '../../lib/types';
 
-export const example: Lesson = {
+const example: Lesson = {
   id: '1-6',
   title: '走了多遠',
   steps: [
@@ -107,9 +107,11 @@ export const example: Lesson = {
     },
   ],
 };
+
+export default example;
 ```
 
-這個例子只示範寫法，所以只有 3 個步驟；真正的一課要有 5 到 8 個步驟，`npm test` 會檢查。匯出的名稱（這裡是 `example`）可以自己取，在 `stations.ts` 匯入的就是這個名稱。
+這個例子只示範寫法，所以只有 3 個步驟；真正的一課要有 5 到 8 個步驟，`npm test` 會檢查。檔案裡的變數名稱（這裡是 `example`）可以自己取，網站讀的是 `export default`。
 
 ### 寫回饋的小訣竅
 
@@ -117,5 +119,5 @@ export const example: Lesson = {
 
 ## 授權
 
-- 程式碼採用 MIT 授權，見 [`LICENSE`](LICENSE)。`src/content/` 裡的程式也是：測試檔 `content.test.ts`，以及 `stations.ts` 裡的程式邏輯（例如 `findLesson`、`orderedLessonIds`）。
-- 課程內容採用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant)，見 [`src/content/LICENSE.md`](src/content/LICENSE.md)。課程內容指的是 `src/content/lessons/` 底下的每一課，以及 `stations.ts` 裡的站名和課程順序。引用或改編時請標示出處，並以相同方式分享。
+- 程式碼採用 MIT 授權，見 [`LICENSE`](LICENSE)。`src/content/` 裡的程式也是：測試檔 `content.test.ts`、`discover.test.ts`，自動讀取課程的 `discover.ts`，以及 `stations.ts` 裡的程式邏輯（例如 `findLesson`、`orderedLessonIds`）。
+- 課程內容採用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant)，見 [`src/content/LICENSE.md`](src/content/LICENSE.md)。課程內容指的是 `src/content/lessons/` 底下的每一課，以及 `stations.ts` 裡的站名；課程順序由 `lessons/` 底下的檔名決定。引用或改編時請標示出處，並以相同方式分享。

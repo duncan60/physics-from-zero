@@ -1,7 +1,7 @@
 // 1-2 速度與位置。課程內容採用 CC BY-SA 4.0，見 ../LICENSE.md。
 import type { Lesson } from '../../lib/types';
 
-export const speedPosition: Lesson = {
+const speedPosition: Lesson = {
   id: '1-2',
   title: '速度與位置',
   steps: [
@@ -66,3 +66,5 @@ export const speedPosition: Lesson = {
     },
   ],
 };
+
+export default speedPosition;

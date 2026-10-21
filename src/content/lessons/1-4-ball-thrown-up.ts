@@ -2,7 +2,7 @@
 // 重力加速度用 10 公尺/秒²（精確值約 9.8），往上為正。
 import type { Lesson } from '../../lib/types';
 
-export const ballThrownUp: Lesson = {
+const ballThrownUp: Lesson = {
   id: '1-4',
   title: '往上丟的球',
   steps: [
@@ -168,3 +168,5 @@ export const ballThrownUp: Lesson = {
     },
   ],
 };
+
+export default ballThrownUp;

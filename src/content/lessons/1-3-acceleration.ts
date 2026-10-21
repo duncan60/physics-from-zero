@@ -7,7 +7,7 @@ const SECONDS = ['0 秒', '1 秒', '2 秒', '3 秒', '4 秒', '5 秒'];
 const SUBTRACT_FIRST =
   '數字和符號都選對了。不過沒有括號時，÷ 會比 − 先算，所以只有一開始的速度被除以時間。要先算出速度變了多少：想先算的那一段，要用括號包起來。';
 
-export const acceleration: Lesson = {
+const acceleration: Lesson = {
   id: '1-3',
   title: '加速度',
   steps: [
@@ -136,3 +136,5 @@ export const acceleration: Lesson = {
     },
   ],
 };
+
+export default acceleration;
