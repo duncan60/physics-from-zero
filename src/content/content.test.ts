@@ -538,3 +538,10 @@ describe.each(reviews.map((r) => [r.stationId, r] as const))('第 %i 站的重�
   // 複習題沿用課程的檢查：可作答、說明、觀念卡長度、拼算式與滑桿的規則、引導不巢狀、表格不填負數等。
   describe('複習題套用課程的內容檢查', () => lessonContentChecks(reviewAsLesson(review)));
 });
+
+// 「平均速度 × 時間」只有在速度平均地（均勻地）變化時才成立，公式列的名稱不能寫成「速度一直在變」就都適用。
+it('第 1 站複習：「距離 = 平均速度 × 時間」那一列的名稱說明是「速度平均地變化時」', () => {
+  const row = reviewOf(1)?.formulas.find((f) => f.formula === '距離 = 平均速度 × 時間');
+  expect(row, '找不到「距離 = 平均速度 × 時間」那一列').toBeDefined();
+  expect(row?.name).toContain('平均地變化');
+});

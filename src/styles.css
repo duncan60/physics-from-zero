@@ -1286,13 +1286,14 @@ a.path-node:active .path-node-circle {
 }
 
 /* ---- 回報問題：每一步卡片下方的小連結（次要，所以是小字、灰色；但點擊範圍高度 44px，寫在元素上） ---- */
+/* 和上面的「檢查／繼續」按鈕留出 16px（加上按鈕區下方 4px 的陰影位置，實際約 20px），手指點偏了不會誤開 GitHub。 */
 
 .lp-report {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: 12px;
-  margin: 8px 0 0;
+  margin: 16px 0 0;
   color: var(--text-muted);
   font-size: 0.875rem;
 }
