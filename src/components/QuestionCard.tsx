@@ -62,16 +62,21 @@ function solutionLines(step: QuestionStep): SolutionLine[] {
  * 拼算式分兩步：先拼算式（拼對了才出現第 2 步），再填算出來的數字；兩步都在「作答中」這個階段裡。
  * `onFinish(cleanFirstTry)`：第一次檢查就答對、也沒有看解答時是 true（拼算式要兩步都第一次就對）。輸入無效（沒填、沒選、沒拼、滑桿沒拉過）不算一次作答。
  * 只有同時傳入 `onRequestGuide`、題目也有 `guide` 時，答錯才會出現「一步一步來」；否則是「再試一次」。
+ * 按「一步一步來」時，拼算式如果已經拼對（在第 2 步答錯），`onRequestGuide` 會收到拼好的算式（tiles 的索引），否則是 null。
+ * 引導結束、這一題重新出現時，把它傳回 `builtFormula`：算式一開始就放在答案列上、鎖定，直接從第 2 步開始，不用重拼。
  * `onCheck(outcome)`：每次按「檢查」、答案有效（不論對錯）時呼叫，告訴外面這次的結果：
  * 答對是 'correct'、答錯是 'wrong'；拼算式第 1 步拼對了（還要算答案）是 'partial'。
  */
 export function QuestionCard(props: {
   step: QuestionStep;
   onFinish: (cleanFirstTry: boolean) => void;
-  onRequestGuide?: () => void;
+  onRequestGuide?: (builtFormula: number[] | null) => void;
   onCheck?: (outcome: CheckOutcome) => void;
+  builtFormula?: number[] | null;
 }): React.JSX.Element {
   const { step, onFinish, onRequestGuide, onCheck } = props;
+  // 只有拼算式用得到：其他題型給了也不理。
+  const builtFormula = step.kind === 'formula' ? (props.builtFormula ?? null) : null;
   const promptId = useId();
   const hintId = useId();
   const [phase, setPhase] = useState<Phase>('answering');
@@ -83,8 +88,9 @@ export function QuestionCard(props: {
   const [tableRaws, setTableRaws] = useState<string[]>(() => (step.kind === 'table' ? blankCells(step).map(() => '') : []));
   const [cellMarks, setCellMarks] = useState<(boolean | null)[]>([]);
   // 拼算式：答案列上的磚塊（tiles 的索引，依序），以及算式是不是已經拼對、進到第 2 步。
-  const [placed, setPlaced] = useState<number[]>([]);
-  const [formulaDone, setFormulaDone] = useState(false);
+  // 從引導回來、算式之前已經拼對時（builtFormula），直接從第 2 步開始。
+  const [placed, setPlaced] = useState<number[]>(() => builtFormula ?? []);
+  const [formulaDone, setFormulaDone] = useState(builtFormula !== null);
   const [sliderValue, setSliderValue] = useState(() => (step.kind === 'slider' ? step.initial : 0));
   // 滑桿有沒有被動過：一開始的位置不是學習者選的，沒動過就按「檢查」只提示、不算一次作答。
   const [sliderMoved, setSliderMoved] = useState(false);
@@ -114,7 +120,7 @@ export function QuestionCard(props: {
     target?.focus();
   }, [retries]);
 
-  // 算式拼對、出現第 2 步時，焦點移到數字輸入框。
+  // 算式拼對、出現第 2 步時（從引導回來直接在第 2 步也一樣），焦點移到數字輸入框。
   useEffect(() => {
     if (formulaDone) answerRef.current?.querySelector<HTMLInputElement>('input')?.focus();
   }, [formulaDone]);
@@ -320,7 +326,7 @@ export function QuestionCard(props: {
   if (phase === 'answering') primary = { label: '檢查', action: check };
   else if (phase === 'correct') primary = { label: '繼續', action: () => onFinish(!hadWrong) };
   else if (phase === 'revealed') primary = { label: '繼續', action: () => onFinish(false) };
-  else if (requestGuide) primary = { label: '一步一步來', action: requestGuide };
+  else if (requestGuide) primary = { label: '一步一步來', action: () => requestGuide(formulaDone ? placed : null) };
   else primary = { label: '再試一次', action: retry };
 
   const solution = solutionLines(step);

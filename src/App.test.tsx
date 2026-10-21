@@ -208,6 +208,15 @@ it('頁首顯示存起來的 XP 和連續天數；地圖標出已完成、目前
   expect(lessonItem('加速度')).toHaveTextContent('鎖住');
 });
 
+it('頁首的連續天數：螢幕閱讀器念的一直是「連續 N 天」；窄螢幕畫面上的短版「N 天」不重複念', () => {
+  seedProgress({ ...emptyProgress(), completed: ['1-1'], xp: 480, streak: 12, lastActiveDay: localDayKey(new Date()) });
+  render(<App />);
+  const stats = screen.getByRole('list', { name: '學習紀錄' });
+  expect(within(stats).getByText('連續 12 天')).not.toHaveAttribute('aria-hidden');
+  expect(within(stats).getByText('12 天')).toHaveAttribute('aria-hidden', 'true');
+  expect(within(stats).getByText('480 XP')).toBeInTheDocument();
+});
+
 it('地圖：perfect 裡的課顯示「完美」；舊的「已完成」照常顯示', () => {
   // 1-4 在 perfect 裡、卻沒有完成（存檔被改過）：不算完美，也不會因此解鎖
   seedProgress({ ...emptyProgress(), completed: ['1-1', '1-2'], perfect: ['1-1', '1-4'], xp: 60, streak: 1, lastActiveDay: localDayKey(new Date()) });

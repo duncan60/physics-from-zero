@@ -314,15 +314,18 @@ it('1-5 bus-slide 拼成「10 − 0」：回饋不稱讚學習者不一定拼過
   }
 });
 
-it('1-5 bus-slide 第 2 步答 50、2 的回饋：不引用某一種算式，也不說「先…再…」', () => {
+it('1-5 bus-slide 第 2 步答 50、2、5 的回饋：不引用某一種算式，也不說「先…再…」', () => {
   const step = findStep('1-5', 'bus-slide');
   if (step?.kind !== 'formula') throw new Error('bus-slide 不是拼算式');
-  for (const value of [50, 2]) {
+  for (const value of [50, 2, 5]) {
     const feedback = step.wrongAnswers?.find((wrong) => wrong.value === value)?.feedback ?? '';
     expect(feedback, String(value)).toMatch(/\S/);
+    expect(feedback, String(value)).not.toContain('(10 + 0) ÷ 2');
     expect(feedback, String(value)).not.toMatch(/\(\s*10/);
     expect(feedback, String(value)).not.toMatch(/先.*再/);
   }
+  // 答 5：只算到平均速度。物理的提示要留著：還要乘上時間
+  expect(step.wrongAnswers?.find((wrong) => wrong.value === 5)?.feedback).toMatch(/還要乘上時間/);
 });
 
 it('1-5 scooter-average 的引導：題目和說明寫的是同一個順序 (6 + 18)', () => {

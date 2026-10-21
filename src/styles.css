@@ -311,6 +311,11 @@ button {
   flex: none;
 }
 
+/* 連續天數的短版「12 天」：只在窄螢幕顯示（見下面的 480px），螢幕閱讀器一直念完整的「連續 12 天」。 */
+.stat-short {
+  display: none;
+}
+
 .stat--streak svg {
   color: var(--streak);
 }
@@ -364,7 +369,9 @@ button {
 }
 
 /* 手機寬度（到 480px）：拿掉標誌、字和間距小一點、音效開關只留喇叭圖示（「音效：開／關」留給螢幕閱讀器），
-   網站名稱、連續天數、XP 和音效開關才排得進同一行（390–430px 都是）。數字很大排不下時，工具列換到下一行靠右。 */
+   連續天數只顯示「12 天」（有火焰圖示，「連續 12 天」留給螢幕閱讀器），
+   網站名稱、連續天數、XP 和音效開關才排得進同一行（390–430px、「12 天」「480 XP」都是）。
+   數字很大或螢幕更窄（360px）排不下時，工具列換到下一行靠右，不會有水平捲軸。 */
 @media (max-width: 480px) {
   .site-header-inner {
     column-gap: 8px;
@@ -392,7 +399,8 @@ button {
     padding: 0;
   }
 
-  .sound-toggle-text {
+  .sound-toggle-text,
+  .stat-full {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -400,6 +408,10 @@ button {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+
+  .stat-short {
+    display: inline;
   }
 }
 

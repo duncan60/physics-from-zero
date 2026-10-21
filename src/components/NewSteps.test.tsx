@@ -715,6 +715,66 @@ it('LessonPlayer：一課裡混合 formula、slider、match 能一路走到完�
   expect(onExit).not.toHaveBeenCalled();
 });
 
+it('LessonPlayer：拼算式第 2 步答錯 → 一步一步來 → 回到原題：算式還在答案列、直接停在第 2 步；這一題仍然不算一次答對', async () => {
+  const lesson: Lesson = {
+    id: 'test-formula-resume',
+    title: '測試接著算',
+    steps: [
+      {
+        ...formulaStep,
+        guide: [{ kind: 'number', id: 'cart-accel-count', prompt: '20 ÷ 20 是多少？', answer: 1, explanation: '20 ÷ 20 = 1。' }],
+      },
+      { kind: 'number', id: 'after', prompt: '1 + 1 是多少？', answer: 2, explanation: '1 + 1 = 2。' },
+    ],
+  };
+  const onComplete = vi.fn();
+  const user = setupUser();
+  render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={vi.fn()} />);
+
+  // 算式第一次就拼對，第 2 步答錯 → 一步一步來 → 引導跑完
+  await user.type(await solveFormula(user), '400');
+  await user.click(button('檢查'));
+  expect(screen.getByText('400 是 20 × 20，加速度要用除的。')).toBeInTheDocument();
+  await user.click(button('一步一步來'));
+  await user.type(screen.getByRole('textbox', { name: '20 ÷ 20 是多少？' }), '1');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  // 回到原題：拼好的算式還在答案列（鎖定，下方沒有磚塊），不用重拼；直接在第 2 步，游標在空的數字輸入框
+  expect(screen.getByText(formulaStep.prompt)).toBeInTheDocument();
+  expect(names(row())).toEqual(['20', '除以', '20']);
+  for (const tile of within(row()).getAllByRole('button')) expect(tile).toBeDisabled();
+  expect(screen.queryByRole('group', { name: '磚塊' })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
+  const input = screen.getByRole('textbox', { name: /第 2 步：算出答案/ });
+  expect(input).toHaveValue('');
+  expect(input).toHaveFocus();
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+  expect(button('檢查')).toBeInTheDocument();
+
+  // 再答錯一次，一步一步來之後回來，算式也一樣還在
+  await user.type(input, '400');
+  await user.click(button('檢查'));
+  await user.click(button('一步一步來'));
+  await user.type(screen.getByRole('textbox', { name: '20 ÷ 20 是多少？' }), '1');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(names(row())).toEqual(['20', '除以', '20']);
+  await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), '1');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+
+  // 下一題第一次就對；新的一題從空的開始
+  await user.type(screen.getByRole('textbox', { name: '1 + 1 是多少？' }), '2');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  // 10 + 數字題 5；拼算式答錯過、用了引導，不算一次答對，所以不是完美
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 15, perfect: false, accuracy: 50 }));
+});
+
 it('LessonPlayer：配對配過一次之後按「離開」，要先確認', async () => {
   const user = setupUser();
   const onExit = vi.fn();

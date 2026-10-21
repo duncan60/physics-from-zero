@@ -56,7 +56,9 @@ export function Header(props: { xp: number; streak: number; soundOn: boolean; on
           <ul className="stats" aria-label="學習紀錄">
             <li className={streak > 0 ? 'stat stat--streak' : 'stat stat--streak stat--zero'}>
               <FlameIcon />
-              <span>{`連續 ${streak} 天`}</span>
+              {/* 窄螢幕畫面上只顯示短版「12 天」，頁首才排得進一行；螢幕閱讀器一直念完整的「連續 12 天」，短版不重複念。 */}
+              <span className="stat-full">{`連續 ${streak} 天`}</span>
+              <span className="stat-short" aria-hidden="true">{`${streak} 天`}</span>
             </li>
             <li className="stat stat--xp">
               <BoltIcon />

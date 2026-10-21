@@ -190,6 +190,9 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, 
   const [inGuide, setInGuide] = useState(false);
   // 每從引導回到原題一次就加一，讓原題用新的 key 重新掛載，重新作答。
   const [attempt, setAttempt] = useState(0);
+  // 拼算式在第 2 步答錯、按了「一步一步來」：已經拼對的算式（tiles 的索引）。回到原題時放回答案列，直接從第 2 步接著作答；
+  // 算式本身拼錯時是 null，回來重拼。換下一步時清掉。
+  const [builtFormula, setBuiltFormula] = useState<number[] | null>(null);
   // 這一題答錯過（之後才會有引導、看解答），就不是一次答對；連續答對在畫面上也馬上中斷，不等這一題結束。
   const [missed, setMissed] = useState(false);
   // 只算題目的作答統計，每一題結束時更新。
@@ -237,6 +240,7 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, 
     setIndex((i) => i + 1);
     setInGuide(false);
     setAttempt(0);
+    setBuiltFormula(null);
     setMissed(false);
     setBounce(false);
   }
@@ -260,8 +264,9 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, 
     play(outcome === 'wrong' ? 'wrong' : 'correct');
   }
 
-  function startGuide(): void {
+  function startGuide(formula: number[] | null): void {
     setMissed(true); // 只有答錯才會有「一步一步來」，這裡再標一次比較保險
+    setBuiltFormula(formula);
     setInGuide(true);
   }
 
@@ -318,7 +323,13 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, 
           );
         }
         return (
-          <QuestionCard step={current} onFinish={finishQuestion} onRequestGuide={startGuide} onCheck={handleCheck} />
+          <QuestionCard
+            step={current}
+            onFinish={finishQuestion}
+            onRequestGuide={startGuide}
+            onCheck={handleCheck}
+            builtFormula={builtFormula}
+          />
         );
     }
   }
