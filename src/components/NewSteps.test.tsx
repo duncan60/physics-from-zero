@@ -74,6 +74,7 @@ const sliderStep: SliderStep = {
   tooHigh: '推力太大：購物車加速得比 2 公尺/秒² 快。',
   explanation: '力 = 質量 × 加速度 = 10 × 2 = 20 N。',
   anim: 'cart',
+  cartMass: 10,
 };
 
 const matchStep: MatchStep = {
@@ -129,6 +130,15 @@ const queryButton = (name: string) => screen.queryByRole('button', { name });
 const row = () => screen.getByRole('group', { name: '你的算式' });
 const bank = () => screen.getByRole('group', { name: '磚塊' });
 const slider = () => screen.getByRole('slider', { name: '推力' });
+/** 滑桿題上方的購物車畫面（名稱寫著質量和現在的推力）。 */
+const cartScene = () => screen.getByRole('img', { name: /的購物車，推力 / });
+/** 購物車連同力的箭頭一起移動的那一組。 */
+const cartGroup = () => cartScene().querySelector('.lp-cart');
+const forceArrow = () => cartScene().querySelector('.lp-cart-force');
+const arrowLength = () => Number(forceArrow()?.getAttribute('data-length'));
+/** 按「檢查」後購物車要跑的距離（SVG 座標），放在 --lp-cart-travel。 */
+const cartTravel = () => Number.parseFloat(cartScene().style.getPropertyValue('--lp-cart-travel'));
+const accelLine = () => screen.queryByText(/^加速度 = /);
 /** 至少 44px 高，手指才好按。 */
 function expectTappable(element: HTMLElement): void {
   expect(Number.parseFloat(element.style.minHeight)).toBeGreaterThanOrEqual(44);
@@ -486,7 +496,8 @@ it('滑桿：方向鍵調整，到 min/max 不超出；太小/太大給對應回
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText(sliderStep.tooLow)).toBeInTheDocument();
   expect(input).toBeDisabled();
-  expect(screen.queryByRole('img', { name: '購物車加速前進' })).not.toBeInTheDocument();
+  expect(cartScene()).toHaveClass('lp-cart-anim--play'); // 答錯也動
+  expect(accelLine()).toHaveTextContent('加速度 = 3 ÷ 10 = 0.3 公尺/秒²');
 
   // 再試一次：焦點回到滑桿；End 到最大值，再往右、往上也不會超過
   await user.click(button('再試一次'));
@@ -509,7 +520,7 @@ it('滑桿：方向鍵調整，到 min/max 不超出；太小/太大給對應回
   await user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
   expect(screen.getByText(sliderStep.explanation)).toBeInTheDocument();
-  expect(screen.getByRole('img', { name: '購物車加速前進' })).toBeInTheDocument();
+  expect(cartScene()).toHaveClass('lp-cart-anim--play');
   await user.click(button('繼續'));
   expect(onFinish).toHaveBeenCalledWith(false); // 錯過兩次
 });
@@ -536,23 +547,113 @@ it('滑桿：在滑桿上按 Enter 等於「檢查」；第一次就對 → onFi
   expect(card.onFinish).toHaveBeenCalledWith(false);
 });
 
-it('滑桿：減少動態效果時不播放動畫', async () => {
-  // 一般情況：答對後購物車往右加速（播放動畫）
+it('滑桿：一開始就有購物車（標示質量）和力的箭頭；箭頭長度跟著推力變，0 N 沒有箭頭，最大值也整支畫得下', () => {
+  renderCard(sliderStep);
+  expect(cartScene()).toHaveAccessibleName('質量 10 公斤的購物車，推力 0 N');
+  expect(within(cartScene()).getByText('10 公斤')).toBeInTheDocument();
+  expect(forceArrow()).toBeNull(); // 推力 0：沒有箭頭
+  // 還沒檢查：購物車停在起點，不動、也還沒有加速度
+  expect(cartScene()).not.toHaveClass('lp-cart-anim--play');
+  expect(cartGroup()).not.toHaveAttribute('transform');
+  expect(accelLine()).not.toBeInTheDocument();
+
+  fireEvent.change(slider(), { target: { value: '10' } });
+  expect(cartScene()).toHaveAccessibleName('質量 10 公斤的購物車，推力 10 N');
+  const short = arrowLength();
+  expect(short).toBeGreaterThan(0);
+  fireEvent.change(slider(), { target: { value: '20' } });
+  expect(arrowLength()).toBeCloseTo(short * 2);
+  fireEvent.change(slider(), { target: { value: '40' } });
+  expect(arrowLength()).toBeCloseTo(short * 4);
+  expect(cartScene()).not.toHaveClass('lp-cart-anim--play'); // 拉滑桿時不動，按「檢查」才動
+
+  // 最長的箭頭（和它的標示）都在 viewBox 裡；SVG 跟著寬度縮放，360px 的手機也畫得下
+  const [, , viewWidth] = (cartScene().getAttribute('viewBox') ?? '').split(' ').map(Number);
+  const xs = (forceArrow()?.getAttribute('points') ?? '').trim().split(/\s+/).map((point) => Number(point.split(',')[0]));
+  expect(xs.length).toBeGreaterThan(2);
+  expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+  expect(Math.max(...xs)).toBeLessThanOrEqual(viewWidth);
+  expect(cartScene()).toHaveAttribute('width', '100%');
+});
+
+it('滑桿：按「檢查」後購物車用 a = F ÷ m 往前加速，答對、答錯都動，旁邊寫出算出來的加速度', async () => {
+  const { user } = renderCard(sliderStep);
+  fireEvent.change(slider(), { target: { value: '5' } });
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(accelLine()).toHaveTextContent('加速度 = 5 ÷ 10 = 0.5 公尺/秒²');
+  expect(cartScene()).toHaveClass('lp-cart-anim--play');
+  const slow = cartTravel();
+  expect(slow).toBeGreaterThan(0);
+
+  // 再試一次：購物車回到起點，加速度收起來，箭頭跟著新的推力
+  await user.click(button('再試一次'));
+  expect(cartScene()).not.toHaveClass('lp-cart-anim--play');
+  expect(accelLine()).not.toBeInTheDocument();
+  fireEvent.change(slider(), { target: { value: '20' } });
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  expect(accelLine()).toHaveTextContent('加速度 = 20 ÷ 10 = 2 公尺/秒²');
+  expect(cartScene()).toHaveClass('lp-cart-anim--play');
+  expect(cartScene()).toHaveAccessibleName('質量 10 公斤的購物車，推力 20 N，往前加速');
+  // 一樣的時間裡，推力 4 倍 → 加速度 4 倍 → 跑的距離也是 4 倍
+  expect(cartTravel()).toBeCloseTo(slow * 4);
+});
+
+it('滑桿：推力 0 N 時加速度是 0，購物車不動', async () => {
+  const { user } = renderCard({ ...sliderStep, initial: 5 });
+  fireEvent.change(slider(), { target: { value: '0' } });
+  await user.click(button('檢查'));
+  expect(accelLine()).toHaveTextContent('加速度 = 0 ÷ 10 = 0 公尺/秒²');
+  expect(cartTravel()).toBe(0);
+  expect(cartScene()).toHaveAccessibleName('質量 10 公斤的購物車，推力 0 N，沒有動');
+});
+
+it('滑桿：質量 15 公斤（月球的購物車）除不盡，加速度寫「約」到小數第 2 位', async () => {
+  const { user } = renderCard({ ...sliderStep, id: 'moon-cart', max: 60, answer: 30, cartMass: 15 });
+  expect(within(cartScene()).getByText('15 公斤')).toBeInTheDocument();
+  fireEvent.change(slider(), { target: { value: '7' } });
+  await user.click(button('檢查'));
+  expect(accelLine()).toHaveTextContent('加速度 = 7 ÷ 15，約 0.47 公尺/秒²');
+});
+
+it('滑桿：沒有給質量時照樣畫購物車和箭頭，只是不標示質量、不寫加速度', async () => {
+  const { cartMass: _unused, ...noMass } = sliderStep;
+  const { user } = renderCard(noMass);
+  expect(screen.getByRole('img', { name: '購物車，推力 0 N' })).toBeInTheDocument();
+  fireEvent.change(slider(), { target: { value: '20' } });
+  await user.click(button('檢查'));
+  expect(screen.getByRole('img', { name: '購物車，推力 20 N，往前加速' })).toHaveClass('lp-cart-anim--play');
+  expect(accelLine()).not.toBeInTheDocument();
+});
+
+it('滑桿：減少動態效果時不播放動畫，購物車直接停在算出來的位置（答對、答錯都一樣）', async () => {
+  // 一般情況：檢查後購物車往右加速（播放動畫）
   let card = renderCard(sliderStep);
   fireEvent.change(slider(), { target: { value: '20' } });
   await card.user.click(button('檢查'));
-  expect(screen.getByRole('img', { name: '購物車加速前進' })).toHaveClass('lp-cart-anim--play');
+  expect(cartScene()).toHaveClass('lp-cart-anim--play');
+  const travelled = cartTravel();
   card.unmount();
 
-  // 減少動態效果：購物車直接停在終點，不播放動畫
+  // 減少動態效果：還沒檢查時在起點；檢查後直接畫在終點，不播放動畫，加速度照樣寫出來
   mockReducedMotion();
   card = renderCard(sliderStep);
+  fireEvent.change(slider(), { target: { value: '5' } });
+  expect(cartGroup()).not.toHaveAttribute('transform');
+  await card.user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(cartScene()).not.toHaveClass('lp-cart-anim--play');
+  expect(cartGroup()).toHaveAttribute('transform', `translate(${travelled / 4} 0)`);
+  expect(accelLine()).toHaveTextContent('加速度 = 5 ÷ 10 = 0.5 公尺/秒²');
+  await card.user.click(button('再試一次'));
+  expect(cartGroup()).not.toHaveAttribute('transform');
   fireEvent.change(slider(), { target: { value: '20' } });
   await card.user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
-  const cart = screen.getByRole('img', { name: '購物車加速前進' });
-  expect(cart).not.toHaveClass('lp-cart-anim--play');
-  expect(cart.querySelector('.lp-cart')).toHaveAttribute('transform', expect.stringMatching(/^translate\(\d+/));
+  expect(cartScene()).not.toHaveClass('lp-cart-anim--play');
+  expect(cartGroup()).toHaveAttribute('transform', `translate(${travelled} 0)`);
+  expect(accelLine()).toHaveTextContent('加速度 = 20 ÷ 10 = 2 公尺/秒²');
 });
 
 it('配對：右欄依注入的亂數排序；配錯會恢復並使 onFinish(false)；全對 onFinish(true)', async () => {
@@ -723,7 +824,7 @@ it('LessonPlayer：一課裡混合 formula、slider、match 能一路走到完�
   expect(slider()).toHaveValue('20');
   await user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
-  expect(screen.getByRole('img', { name: '購物車加速前進' })).toBeInTheDocument();
+  expect(accelLine()).toHaveTextContent('加速度 = 20 ÷ 10 = 2 公尺/秒²');
   await user.click(button('繼續'));
 
   // 配對：第一次就全部配對

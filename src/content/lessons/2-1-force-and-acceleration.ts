@@ -110,6 +110,7 @@ const forceAndAcceleration: Lesson = {
       tooHigh: '推力太大了：這樣推，購物車的加速度會超過 2 公尺/秒²。再看一次 F = m × a，把質量 10 公斤和加速度 2 公尺/秒² 放進去算算看。',
       explanation: 'F = m × a = 10 × 2 = 20 N，購物車的速度每秒增加 2 公尺/秒。力常寫成大寫的 F，單位牛頓寫成大寫的 N，不寫成小寫的 n。',
       anim: 'cart',
+      cartMass: 10,
     },
     {
       kind: 'formula',

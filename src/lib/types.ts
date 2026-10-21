@@ -16,7 +16,9 @@ export interface FormulaAcceptedNote { tokens: string[]; note: string }
 // 有標示的磚塊在 accepted、wrongForms、acceptedNotes 裡寫成「數值|標示」（例如 '20|力'，見 lib/formula 的 tileToken），照用途判斷、不只看數值：
 // 20|滿車質量 ÷ 20|力 算出來碰巧和 20|力 ÷ 20|滿車質量 一樣，但不是同一個算式。沒有標示的題目照舊只寫數值。
 export interface FormulaStep { kind: 'formula'; id: string; prompt: string; tiles: string[]; tileLabels?: (string | undefined)[]; accepted: string[][]; wrongForms?: FormulaWrongForm[]; acceptedNotes?: FormulaAcceptedNote[]; answer: number; tolerance?: number; unit?: string; wrongAnswers?: WrongAnswer[]; explanation: string; guide?: GuideStep[] }
-export interface SliderStep { kind: 'slider'; id: string; prompt: string; quantity: string; unit: string; min: number; max: number; step: number; initial: number; answer: number; tolerance?: number; tooLow: string; tooHigh: string; explanation: string; anim: 'cart'; guide?: GuideStep[] }
+// anim 'cart'：滑桿上方畫一台購物車和推它的力的箭頭（長度跟著滑桿的值）；按「檢查」後購物車用 a = F ÷ m 往前加速。
+// cartMass 是購物車的質量（公斤），畫面上標示出來、用來算加速度；要和題目裡說的質量一樣（content.test.ts 會檢查）。
+export interface SliderStep { kind: 'slider'; id: string; prompt: string; quantity: string; unit: string; min: number; max: number; step: number; initial: number; answer: number; tolerance?: number; tooLow: string; tooHigh: string; explanation: string; anim: 'cart'; cartMass?: number; guide?: GuideStep[] }
 export interface MatchPair { left: string; right: string }
 export interface MatchStep { kind: 'match'; id: string; prompt: string; pairs: MatchPair[]; explanation: string } // 沒有 guide、沒有看解答
 export type QuestionStep = ChoiceStep | NumberStep | TableStep | FormulaStep | SliderStep;

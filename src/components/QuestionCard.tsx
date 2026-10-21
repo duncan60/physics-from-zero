@@ -359,6 +359,8 @@ export function QuestionCard(props: {
       case 'slider':
         return (
           <>
+            {/* 一開始就畫出購物車和力的箭頭（跟著滑桿變長變短）；按「檢查」之後，答對答錯都用 a = F ÷ m 往前開。 */}
+            <CartAnim mass={step.cartMass} force={sliderValue} max={step.max} quantity={step.quantity} unit={step.unit} moving={!answering} />
             <SliderInput
               step={step}
               value={sliderValue}
@@ -372,7 +374,6 @@ export function QuestionCard(props: {
               mark={resultMark}
               describedBy={describedBy}
             />
-            {phase === 'correct' && <CartAnim />}
           </>
         );
     }

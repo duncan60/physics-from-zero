@@ -8,3 +8,19 @@ export function checkSlider(step: SliderStep, value: number): CheckResult {
   if (isClose(value, step.answer, step.tolerance)) return { correct: true };
   return { correct: false, feedback: value < step.answer ? step.tooLow : step.tooHigh };
 }
+
+/** 和畫面上的數字一樣：負數用 U+2212 的減號。 */
+function formatValue(value: number): string {
+  return value < 0 ? `−${-value}` : String(value);
+}
+
+/**
+ * 滑桿題購物車旁邊的那一行：加速度 a = F ÷ m（公尺/秒²）。
+ * 除得盡就寫「= 2」；除不盡就四捨五入到小數第 2 位，寫「，約 0.47」。
+ */
+export function cartAccelerationText(force: number, mass: number): string {
+  const exact = force / mass;
+  const rounded = Math.round(exact * 100) / 100 || 0; // || 0：不要出現 −0
+  const shown = Math.abs(rounded - exact) < 1e-9 ? ` = ${formatValue(rounded)}` : `，約 ${formatValue(rounded)}`;
+  return `加速度 = ${formatValue(force)} ÷ ${formatValue(mass)}${shown} 公尺/秒²`;
+}

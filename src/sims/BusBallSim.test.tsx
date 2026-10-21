@@ -27,14 +27,28 @@ const resetButton = () => screen.getByRole('button', { name: '重來' });
 const result = () => screen.getByRole('status');
 const slowToggle = () => screen.getByRole('checkbox', { name: '慢動作' });
 const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+const BRAKE_HINT = '先按『丟球』，球在空中時再按『急煞車』';
+const brakeHint = () => screen.queryByText(BRAKE_HINT);
 
-it('有「丟球」「急煞車」「重來」三個按鈕，至少 44px 高，一開始沒有結果', () => {
+/** 「急煞車」不能按的時候是 aria-disabled（還拿得到焦點，螢幕閱讀器念得到為什麼），按了沒有反應。 */
+function expectBrakeBlocked(): void {
+  expect(brakeButton()).toHaveAttribute('aria-disabled', 'true');
+}
+
+function expectBrakeReady(): void {
+  expect(brakeButton()).not.toHaveAttribute('aria-disabled');
+  expect(brakeButton()).toBeEnabled();
+}
+
+it('有「丟球」「急煞車」「重來」三個按鈕，至少 44px 高，一開始沒有結果；還沒丟球，「急煞車」不能按', () => {
   mockReducedMotion(true);
   render(<BusBallSim />);
   for (const button of [throwButton(), brakeButton(), resetButton()]) {
-    expect(button).toBeEnabled();
     expect(button).toHaveStyle({ minHeight: '44px' });
   }
+  expect(throwButton()).toBeEnabled();
+  expect(resetButton()).toBeEnabled();
+  expectBrakeBlocked();
   expect(result()).toBeEmptyDOMElement();
 });
 
@@ -68,13 +82,20 @@ describe('減少動態效果', () => {
     expect(result()).toHaveTextContent(/^落在你前方 1\.0 公尺$/);
   });
 
-  it('先按「急煞車」再「丟球」，落在前方 4.0 公尺', () => {
+  it('丟球前「急煞車」不能按（按了沒反應）；丟球後才可以按，按了當作球飛到一半煞車', () => {
     mockReducedMotion(true);
     render(<BusBallSim />);
+    expectBrakeBlocked();
+    // 說明在上面那段「減少動態效果」的文字裡（丟球之後再按），不顯示「球在空中時」的提示
+    expect(brakeButton()).toHaveAccessibleDescription(/丟球之後再按「急煞車」/);
+    expect(brakeHint()).not.toBeInTheDocument();
     fireEvent.click(brakeButton());
-    expect(result()).toBeEmptyDOMElement();
     fireEvent.click(throwButton());
-    expect(result()).toHaveTextContent(/^落在你前方 4\.0 公尺$/);
+    expect(result()).toHaveTextContent(/^落在手上$/); // 剛才那一下沒有煞到車
+    expectBrakeReady();
+    fireEvent.click(brakeButton());
+    expect(result()).toHaveTextContent(/^落在你前方 1\.0 公尺$/);
+    expectBrakeBlocked();
   });
 
   it('沒有動畫可以放慢，所以不顯示「慢動作」開關', () => {
@@ -91,7 +112,7 @@ describe('減少動態效果', () => {
     fireEvent.click(resetButton());
     expect(result()).toBeEmptyDOMElement();
     expect(throwButton()).toBeEnabled();
-    expect(brakeButton()).toBeEnabled();
+    expectBrakeBlocked();
     fireEvent.click(throwButton());
     expect(result()).toHaveTextContent(/^落在手上$/);
   });
@@ -127,22 +148,57 @@ describe('有動畫（假的計時器）', () => {
     expect(meters).toBeLessThanOrEqual(1.2);
   });
 
-  it('丟球之前就能按「急煞車」，同一刻丟球會落在前方 4.0 公尺', () => {
+  it('丟球之前「急煞車」不能按，旁邊有提示；按了沒反應，公車照樣前進，之後丟球落在手上', () => {
     setup();
     advance(200);
+    expectBrakeBlocked();
+    expect(brakeHint()).toBeVisible();
+    expect(brakeButton()).toHaveAccessibleDescription(BRAKE_HINT);
     fireEvent.click(brakeButton());
-    fireEvent.click(throwButton());
-    advance(1200);
-    expect(result()).toHaveTextContent(/^落在你前方 4\.0 公尺$/);
-  });
-
-  it('公車停住之後才丟，落在手上', () => {
-    setup();
-    fireEvent.click(brakeButton());
-    advance(2000);
+    advance(500);
+    expect(screen.getByText('公車速度：10.0 公尺/秒')).toBeInTheDocument(); // 沒有「煞車中」
     fireEvent.click(throwButton());
     advance(1200);
     expect(result()).toHaveTextContent(/^落在手上$/);
+  });
+
+  it('球在空中時「急煞車」可以按、提示收起來；煞車之後不能再按，提示也不再出現', () => {
+    setup();
+    fireEvent.click(throwButton());
+    advance(300);
+    expectBrakeReady();
+    expect(brakeHint()).not.toBeVisible();
+    expect(brakeButton()).not.toHaveAccessibleDescription();
+    fireEvent.click(brakeButton());
+    expectBrakeBlocked();
+    expect(brakeHint()).not.toBeVisible();
+    advance(900);
+    expect(result()).toHaveTextContent(/^落在你前方/);
+    expect(brakeHint()).not.toBeVisible();
+  });
+
+  it('球落地了還沒煞車：「急煞車」不能按、提示再出現，按了也不會改變結果', () => {
+    setup();
+    fireEvent.click(throwButton());
+    advance(1200);
+    expect(result()).toHaveTextContent(/^落在手上$/);
+    expectBrakeBlocked();
+    expect(brakeHint()).toBeVisible();
+    fireEvent.click(brakeButton());
+    advance(500);
+    expect(result()).toHaveTextContent(/^落在手上$/);
+  });
+
+  it('「急煞車」不能按時仍然拿得到焦點（不會把焦點丟掉）；在空中用鍵盤按下去，焦點留在按鈕上', () => {
+    setup();
+    act(() => brakeButton().focus());
+    expect(brakeButton()).toHaveFocus();
+    fireEvent.click(throwButton());
+    advance(300);
+    act(() => brakeButton().focus());
+    fireEvent.click(brakeButton());
+    expect(brakeButton()).toHaveFocus();
+    expectBrakeBlocked();
   });
 
   it('球落地後只剩「重來」可以按；重來之後可以再丟', () => {
@@ -150,12 +206,12 @@ describe('有動畫（假的計時器）', () => {
     fireEvent.click(throwButton());
     advance(1200);
     expect(throwButton()).toBeDisabled();
-    expect(brakeButton()).toBeDisabled();
+    expectBrakeBlocked();
     expect(resetButton()).toBeEnabled();
     fireEvent.click(resetButton());
     expect(result()).toBeEmptyDOMElement();
     expect(throwButton()).toBeEnabled();
-    expect(brakeButton()).toBeEnabled();
+    expectBrakeBlocked(); // 重來之後一樣要先丟球
     fireEvent.click(throwButton());
     advance(500);
     fireEvent.click(brakeButton());
@@ -200,13 +256,17 @@ describe('有動畫（假的計時器）', () => {
     expect(meters).toBeLessThanOrEqual(1.2);
   });
 
-  it('慢動作：同一刻煞車並丟球，仍然落在前方 4.0 公尺', () => {
+  it('慢動作：丟球前一樣不能煞車；過了真實的 1 秒球還在空中，「急煞車」仍然可以按', () => {
     setup();
     fireEvent.click(slowToggle());
-    fireEvent.click(brakeButton());
+    expectBrakeBlocked();
     fireEvent.click(throwButton());
-    advance(5000);
-    expect(result()).toHaveTextContent(/^落在你前方 4\.0 公尺$/);
+    advance(1500);
+    expect(result()).toBeEmptyDOMElement();
+    expectBrakeReady();
+    advance(3000);
+    expect(result()).toHaveTextContent(/^落在手上$/);
+    expectBrakeBlocked();
   });
 
   it('飛行途中切換慢動作不會弄壞狀態：開了就變慢，關了就恢復', () => {
@@ -238,8 +298,8 @@ describe('有動畫（假的計時器）', () => {
     setup();
     fireEvent.click(throwButton());
     expect(throwButton()).toBeDisabled();
-    expect(brakeButton()).toBeEnabled();
+    expectBrakeReady();
     fireEvent.click(brakeButton());
-    expect(brakeButton()).toBeDisabled();
+    expectBrakeBlocked();
   });
 });

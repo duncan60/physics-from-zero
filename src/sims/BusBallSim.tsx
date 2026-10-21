@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties } from 'react';
 import {
   FLIGHT_TIME,
@@ -42,6 +42,9 @@ interface Run {
 const START: Run = { t: 0, throwAt: null, brakeAt: null };
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+// 「急煞車」不能按的時候（還沒丟球、球已經落地）顯示在按鈕下方的提示。
+const BRAKE_HINT = '先按『丟球』，球在空中時再按『急煞車』';
 
 function subscribeReducedMotion(onChange: () => void): () => void {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
@@ -98,6 +101,8 @@ function buttonStyle(kind: 'primary' | 'danger' | 'plain', disabled: boolean): C
 
 export function BusBallSim(): React.JSX.Element {
   const reduced = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
+  const brakeHintId = useId();
+  const reducedNoteId = useId();
   const [run, setRun] = useState<Run>(START);
   const [slow, setSlow] = useState(false);
   const { t, throwAt, brakeAt } = run;
@@ -138,10 +143,10 @@ export function BusBallSim(): React.JSX.Element {
       return reduced ? { ...r, throwAt: r.t, t: r.t + FLIGHT_TIME } : { ...r, throwAt: r.t };
     });
 
+  // 「急煞車」只在球丟出、還在空中時有用：還沒丟球、已經煞過車都不理。
   const brake = (): void =>
     setRun((r) => {
-      if (r.brakeAt !== null) return r;
-      if (r.throwAt === null) return { ...r, brakeAt: r.t };
+      if (r.brakeAt !== null || r.throwAt === null) return r;
       if (r.t >= r.throwAt + FLIGHT_TIME) {
         // 球已經落地。有動畫時煞車已經沒有意義；減少動態效果時沒有「空中」可以按，
         // 就當作球飛到一半時才煞車，讓學習者仍然能做「球在空中煞車」的實驗。
@@ -159,7 +164,10 @@ export function BusBallSim(): React.JSX.Element {
   const showLandingMark = landed && ball.px - HAND_X > 1;
   const braking = brakeAt !== null && t > brakeAt;
   const throwDisabled = throwAt !== null;
-  const brakeDisabled = brakeAt !== null || (landed && !reduced);
+  // 有動畫：球在空中才能煞車。減少動態效果：沒有「空中」，丟球之後就能按（當作球飛到一半時煞車）。
+  const brakeDisabled = brakeAt !== null || throwAt === null || (landed && !reduced);
+  // 還沒煞過車、又不能按的時候，告訴學習者什麼時候按。減少動態效果時，上面那段說明已經講了「丟球之後再按」。
+  const showBrakeHint = !reduced && brakeDisabled && brakeAt === null;
   const speedText = `公車速度：${speed.toFixed(1)} 公尺/秒${braking ? (speed > 0 ? '（煞車中）' : '（已停住）') : ''}${slow ? '，慢動作中' : ''}`;
 
   return (
@@ -236,7 +244,7 @@ export function BusBallSim(): React.JSX.Element {
       </svg>
 
       {reduced ? (
-        <p style={{ margin: '8px 0 0', fontSize: 14 }}>
+        <p id={reducedNoteId} style={{ margin: '8px 0 0', fontSize: 14 }}>
           你開啟了「減少動態效果」，所以不播放動畫，直接顯示結果。丟球之後再按「急煞車」，會當作球飛到一半時煞車。
         </p>
       ) : (
@@ -247,13 +255,28 @@ export function BusBallSim(): React.JSX.Element {
         <button type="button" onClick={throwBall} disabled={throwDisabled} style={buttonStyle('primary', throwDisabled)}>
           丟球
         </button>
-        <button type="button" onClick={brake} disabled={brakeDisabled} style={buttonStyle('danger', brakeDisabled)}>
+        {/* 不能按時用 aria-disabled 而不是 disabled：按鈕還拿得到焦點（在空中用鍵盤按下去，焦點不會掉），
+            螢幕閱讀器也念得到為什麼不能按。按了沒反應由 brake() 擋。 */}
+        <button
+          type="button"
+          onClick={brake}
+          aria-disabled={brakeDisabled ? true : undefined}
+          aria-describedby={brakeDisabled ? (reduced ? reducedNoteId : showBrakeHint ? brakeHintId : undefined) : undefined}
+          style={buttonStyle('danger', brakeDisabled)}
+        >
           急煞車
         </button>
         <button type="button" onClick={reset} style={buttonStyle('plain', false)}>
           重來
         </button>
       </div>
+
+      {/* 一直佔著位置、只切換看不看得到：球在空中時提示收起來，下面的「慢動作」開關不會跟著跳動。 */}
+      {!reduced && (
+        <p id={brakeHintId} style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 600, visibility: showBrakeHint ? 'visible' : 'hidden' }}>
+          {BRAKE_HINT}
+        </p>
+      )}
 
       {!reduced && (
         <>

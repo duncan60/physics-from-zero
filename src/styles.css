@@ -1985,13 +1985,42 @@ a.path-node:active .path-node-circle {
   text-align: center;
 }
 
-/* ---- 購物車動畫（components/sims/CartAnim.tsx）：顏色都用變數，淺色、深色模式都看得清楚 ---- */
+/* ---- 滑桿題的購物車（components/sims/CartAnim.tsx）：顏色都用變數，淺色、深色模式都看得清楚 ---- */
+
+.lp-cart-scene {
+  margin-bottom: 8px;
+}
 
 .lp-cart-anim {
   display: block;
   max-width: 420px;
   height: auto;
-  margin: 16px auto 0;
+  margin: 0 auto;
+}
+
+/* 力的箭頭和它的標示用藍色，和綠色的購物車分得開 */
+.lp-cart-force {
+  fill: var(--info);
+}
+
+.lp-cart-label {
+  fill: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.lp-cart-label--force {
+  fill: var(--info);
+}
+
+/* 檢查之後算出來的加速度；沒有字時也佔一行，滑桿不會跳動 */
+.lp-cart-accel {
+  min-height: 1.6em;
+  margin: 4px 0 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .lp-cart-ground {

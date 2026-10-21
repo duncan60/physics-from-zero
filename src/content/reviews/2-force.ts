@@ -228,6 +228,7 @@ const forceReview: StationReview = {
       tooHigh: '推力太大了：這樣推，購物車的加速度會超過 2 公尺/秒²。如果你把 g 也乘進去了：水平推和 g 沒有關係，F = m × a 只要質量和加速度。',
       explanation: 'F = m × a = 15 × 2 = 30 N，和在地球上一樣。水平推只看質量，質量到了月球也不變，和 g 沒有關係。',
       anim: 'cart',
+      cartMass: 15,
     },
     {
       kind: 'match',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkSlider } from './slider';
+import { cartAccelerationText, checkSlider } from './slider';
 import type { SliderStep } from './types';
 
 // 取自 spec 的 2-1 `empty-cart-force`：10 公斤、目標加速度 2 公尺/秒² → 20 牛頓
@@ -63,4 +63,22 @@ describe('checkSlider', () => {
   });
 
   it('不是數字（NaN）：答錯、沒有「太小／太大」的回饋', () => expect(checkSlider(step, Number.NaN)).toStrictEqual({ correct: false }));
+});
+
+describe('cartAccelerationText（滑桿題購物車旁邊的加速度）', () => {
+  it('a = F ÷ m，除得盡就直接寫出來', () => {
+    expect(cartAccelerationText(20, 10)).toBe('加速度 = 20 ÷ 10 = 2 公尺/秒²');
+    expect(cartAccelerationText(5, 10)).toBe('加速度 = 5 ÷ 10 = 0.5 公尺/秒²');
+    expect(cartAccelerationText(30, 15)).toBe('加速度 = 30 ÷ 15 = 2 公尺/秒²');
+  });
+
+  it('推力 0：加速度 0，購物車不動', () => {
+    expect(cartAccelerationText(0, 10)).toBe('加速度 = 0 ÷ 10 = 0 公尺/秒²');
+  });
+
+  it('除不盡：四捨五入到小數第 2 位，寫「約」', () => {
+    expect(cartAccelerationText(7, 15)).toBe('加速度 = 7 ÷ 15，約 0.47 公尺/秒²');
+    expect(cartAccelerationText(1, 15)).toBe('加速度 = 1 ÷ 15，約 0.07 公尺/秒²');
+    expect(cartAccelerationText(20, 15)).toBe('加速度 = 20 ÷ 15，約 1.33 公尺/秒²');
+  });
 });

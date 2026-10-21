@@ -183,6 +183,11 @@ function assertSlider(s: SliderStep): void {
     expect(text.trim(), `${s.id}：${name} 是空的`).not.toBe('');
     expect(mentionsNumber(text, s.answer), `${s.id}：${name} 直接說出了答案 ${s.answer}`).toBe(false);
   }
+  // 購物車畫面要標示質量、用 a = F ÷ m 算加速度：質量一定要有，而且和題目裡說的一樣
+  if (s.anim === 'cart') {
+    expect(s.cartMass, `${s.id}：購物車滑桿要有 cartMass`).toBeGreaterThan(0);
+    expect(s.prompt, `${s.id}：cartMass ${s.cartMass} 和題目裡的質量不一樣`).toContain(`${s.cartMass} 公斤`);
+  }
 }
 
 function assertMatch(s: MatchStep): void {
@@ -505,7 +510,7 @@ it('1-5 最後一步是公式配對，三對照 spec', () => {
   ]);
 });
 
-it('2-1 推空購物車的滑桿：0 到 40 N、間距 1、從 0 開始、答案 20 N、播放購物車動畫', () => {
+it('2-1 推空購物車的滑桿：0 到 40 N、間距 1、從 0 開始、答案 20 N、播放購物車動畫（購物車 10 公斤）', () => {
   expect(findStep('2-1', 'empty-cart-force')).toMatchObject({
     kind: 'slider',
     quantity: '推力',
@@ -516,7 +521,12 @@ it('2-1 推空購物車的滑桿：0 到 40 N、間距 1、從 0 開始、答案
     initial: 0,
     answer: 20,
     anim: 'cart',
+    cartMass: 10,
   });
+});
+
+it('第 2 站複習的月球購物車滑桿：購物車 15 公斤', () => {
+  expect(reviewOf(2)?.steps.find((s) => s.id === 'moon-cart-force')).toMatchObject({ kind: 'slider', anim: 'cart', cartMass: 15, answer: 30 });
 });
 
 // ---- 拼算式的方塊標示：數值相同的方塊一定分得出來 ----
