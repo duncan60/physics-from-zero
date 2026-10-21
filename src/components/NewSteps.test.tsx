@@ -123,12 +123,12 @@ function mockReducedMotion(): void {
 const INCOMPLETE = '算式還沒拼完：括號要成對，符號兩邊都要有數字。';
 const FORMAT_HINT = '只要填數字，可以是負數（按 ±）或小數；單位已經寫好了';
 const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
-const NUMBER_GUIDE_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？也可以按『一步一步來』。';
+const NUMBER_GUIDE_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？也可以按「一步一步來」。';
 
 const button = (name: string) => screen.getByRole('button', { name });
 const queryButton = (name: string) => screen.queryByRole('button', { name });
 const row = () => screen.getByRole('group', { name: '你的算式' });
-const bank = () => screen.getByRole('group', { name: '磚塊' });
+const bank = () => screen.getByRole('group', { name: '方塊' });
 const slider = () => screen.getByRole('slider', { name: '推力' });
 /** 滑桿題上方的購物車畫面（名稱寫著質量和現在的推力）。 */
 const cartScene = () => screen.getByRole('img', { name: /的購物車，推力 / });
@@ -282,7 +282,7 @@ it('拼算式：拼成已知錯誤算式 → 「還不對」與那則回饋；�
   expect(input).toHaveAccessibleDescription(`公尺/秒² ${FORMAT_HINT}`); // 單位和格式提示
   expect(screen.getByText(FORMAT_HINT)).toBeInTheDocument();
   expect(button('切換正負號')).toBeInTheDocument();
-  expect(screen.queryByRole('group', { name: '磚塊' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: '方塊' })).not.toBeInTheDocument();
   expect(names(row())).toEqual(['20', '除以', '20']);
   for (const tile of within(row()).getAllByRole('button')) expect(tile).toBeDisabled();
   expect(button('檢查')).toBeInTheDocument();
@@ -873,7 +873,7 @@ it('LessonPlayer：拼算式第 2 步答錯 → 一步一步來 → 回到原題
   expect(screen.getByText(formulaStep.prompt)).toBeInTheDocument();
   expect(names(row())).toEqual(['20', '除以', '20']);
   for (const tile of within(row()).getAllByRole('button')) expect(tile).toBeDisabled();
-  expect(screen.queryByRole('group', { name: '磚塊' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: '方塊' })).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
   const input = screen.getByRole('textbox', { name: /第 2 步：算出答案/ });
   expect(input).toHaveValue('');

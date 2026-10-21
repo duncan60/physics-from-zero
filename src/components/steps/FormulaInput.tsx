@@ -145,7 +145,7 @@ export function FormulaInput(props: {
         ))}
       </div>
       {!locked && (
-        <div ref={bankRef} className="lp-tile-bank" role="group" aria-label="磚塊">
+        <div ref={bankRef} className="lp-tile-bank" role="group" aria-label="方塊">
           {tiles.map((value, tile) =>
             used.has(tile) ? (
               // 空位：和磚塊一樣大，其他磚塊不會移動；螢幕閱讀器略過

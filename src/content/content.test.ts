@@ -81,7 +81,8 @@ const NUMBER_TILE = /^[0-9]+(\.[0-9]+)?$/;
 
 /**
  * 拼算式的方塊標示（tileLabels）有什麼問題，沒有問題時是空陣列：
- * 長度要和 tiles 一樣；標示不能是空白；只有數字磚塊可以有標示；標示裡不能有「|」（算式裡寫成「數值|標示」）；
+ * 長度要和 tiles 一樣；標示不能是空白；只有數字磚塊可以有標示；標示裡不能有「|」（算式裡寫成「數值|標示」），
+ * 也不能有半形括號「(」「)」（會和括號方塊搞混）；
  * 同一題裡數值相同的數字磚塊一定都要有標示，而且標示都不一樣（才分得出是哪一塊）；標示不能直接寫出答案。
  */
 function tileLabelProblems(s: Pick<FormulaStep, 'id' | 'tiles' | 'tileLabels' | 'answer'>): string[] {
@@ -95,6 +96,7 @@ function tileLabelProblems(s: Pick<FormulaStep, 'id' | 'tiles' | 'tileLabels' | 
     if (label.trim() === '') problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示是空白`);
     else if (!NUMBER_TILE.test(s.tiles[i] ?? '')) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」不是數字，不能有標示`);
     else if (label.includes('|')) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示「${label}」不能有「|」（算式裡用它隔開數值和標示）`);
+    else if (/[()]/.test(label)) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示「${label}」不能有「(」「)」（會和括號方塊搞混）`);
     else if (mentionsNumber(label, s.answer)) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示「${label}」寫出了答案 ${s.answer}`);
   }
   const byValue = new Map<string, number[]>();
@@ -554,6 +556,11 @@ describe('tileLabelProblems（方塊標示的內容檢查）', () => {
   it('只有數字磚塊可以有標示，標示裡不能有「|」', () => {
     expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: [undefined, undefined, '先算'] })).toHaveLength(1);
     expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['力|質量', undefined, undefined] })).toHaveLength(1);
+  });
+  it('標示裡不能有半形括號「(」「)」：會和括號方塊搞混', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['力(N)', undefined, undefined] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['(力', undefined, undefined] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: [undefined, '質量)', undefined] })).toHaveLength(1);
   });
   it('標示不能是空白，也不能寫出答案', () => {
     expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['', undefined, undefined] })).toHaveLength(1);

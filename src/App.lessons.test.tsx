@@ -175,7 +175,7 @@ async function playStep(user: User, step: Step): Promise<void> {
       }
       break;
     case 'formula': {
-      const bank = screen.getByRole('group', { name: '磚塊' });
+      const bank = screen.getByRole('group', { name: '方塊' });
       // 找下方還沒用到、寫法一樣的第一塊（有標示的磚塊在算式裡是「20|力」，按鈕名稱是「放入 20（力）」）
       const tokens = formulaTiles(step);
       const used = new Set<number>();

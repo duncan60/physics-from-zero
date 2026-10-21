@@ -1238,7 +1238,7 @@ it('showReportLinks 預設和 true 都有「回報問題」，包括一步一步
 // ---- 試玩回饋：按鈕保護看得出來、答錯一定有提示、數字格式提示 ----
 
 const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
-const NUMBER_GUIDE_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？也可以按『一步一步來』。';
+const NUMBER_GUIDE_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？也可以按「一步一步來」。';
 const TABLE_RETRY_HINT = '標出來的格子再看一次：每一格之間變化的量一樣嗎？';
 const FORMAT_HINT = '只要填數字，可以是負數（按 ±）或小數；單位已經寫好了';
 const FORMAT_HINT_NO_UNIT = '只要填數字，可以是負數（按 ±）或小數';

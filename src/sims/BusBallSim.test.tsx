@@ -27,8 +27,11 @@ const resetButton = () => screen.getByRole('button', { name: '重來' });
 const result = () => screen.getByRole('status');
 const slowToggle = () => screen.getByRole('checkbox', { name: '慢動作' });
 const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
-const BRAKE_HINT = '先按『丟球』，球在空中時再按『急煞車』';
+const BRAKE_HINT = '先按「丟球」，球在空中時再按「急煞車」';
 const brakeHint = () => screen.queryByText(BRAKE_HINT);
+/** 球落地了還沒煞車時的提示：「丟球」也不能按了，要先「重來」。 */
+const RETRY_HINT = '按「重來」再試一次';
+const retryHint = () => screen.queryByText(RETRY_HINT);
 
 /** 「急煞車」不能按的時候是 aria-disabled（還拿得到焦點，螢幕閱讀器念得到為什麼），按了沒有反應。 */
 function expectBrakeBlocked(): void {
@@ -177,16 +180,25 @@ describe('有動畫（假的計時器）', () => {
     expect(brakeHint()).not.toBeVisible();
   });
 
-  it('球落地了還沒煞車：「急煞車」不能按、提示再出現，按了也不會改變結果', () => {
+  it('球落地了還沒煞車：「急煞車」不能按，提示改成按「重來」再試一次（「丟球」也不能按了）；按了也不會改變結果', () => {
     setup();
     fireEvent.click(throwButton());
     advance(1200);
     expect(result()).toHaveTextContent(/^落在手上$/);
     expectBrakeBlocked();
-    expect(brakeHint()).toBeVisible();
+    expect(throwButton()).toBeDisabled();
+    expect(brakeHint()).not.toBeInTheDocument(); // 不再叫人「先按丟球」
+    expect(retryHint()).toBeVisible();
+    expect(brakeButton()).toHaveAccessibleDescription(RETRY_HINT);
     fireEvent.click(brakeButton());
     advance(500);
     expect(result()).toHaveTextContent(/^落在手上$/);
+
+    // 重來之後還沒丟球：回到原本的提示
+    fireEvent.click(resetButton());
+    expect(retryHint()).not.toBeInTheDocument();
+    expect(brakeHint()).toBeVisible();
+    expect(brakeButton()).toHaveAccessibleDescription(BRAKE_HINT);
   });
 
   it('「急煞車」不能按時仍然拿得到焦點（不會把焦點丟掉）；在空中用鍵盤按下去，焦點留在按鈕上', () => {

@@ -43,8 +43,9 @@ const START: Run = { t: 0, throwAt: null, brakeAt: null };
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
-// 「急煞車」不能按的時候（還沒丟球、球已經落地）顯示在按鈕下方的提示。
-const BRAKE_HINT = '先按『丟球』，球在空中時再按『急煞車』';
+// 「急煞車」不能按的時候顯示在按鈕下方的提示：還沒丟球時說怎麼做；球落地了還沒煞車時，「丟球」也不能按了，請他先「重來」。
+const BRAKE_HINT = '先按「丟球」，球在空中時再按「急煞車」';
+const RETRY_HINT = '按「重來」再試一次';
 
 function subscribeReducedMotion(onChange: () => void): () => void {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
@@ -168,6 +169,7 @@ export function BusBallSim(): React.JSX.Element {
   const brakeDisabled = brakeAt !== null || throwAt === null || (landed && !reduced);
   // 還沒煞過車、又不能按的時候，告訴學習者什麼時候按。減少動態效果時，上面那段說明已經講了「丟球之後再按」。
   const showBrakeHint = !reduced && brakeDisabled && brakeAt === null;
+  const brakeHint = landed && brakeAt === null ? RETRY_HINT : BRAKE_HINT;
   const speedText = `公車速度：${speed.toFixed(1)} 公尺/秒${braking ? (speed > 0 ? '（煞車中）' : '（已停住）') : ''}${slow ? '，慢動作中' : ''}`;
 
   return (
@@ -274,7 +276,7 @@ export function BusBallSim(): React.JSX.Element {
       {/* 一直佔著位置、只切換看不看得到：球在空中時提示收起來，下面的「慢動作」開關不會跟著跳動。 */}
       {!reduced && (
         <p id={brakeHintId} style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 600, visibility: showBrakeHint ? 'visible' : 'hidden' }}>
-          {BRAKE_HINT}
+          {brakeHint}
         </p>
       )}
 

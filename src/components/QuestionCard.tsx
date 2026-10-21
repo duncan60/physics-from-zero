@@ -26,7 +26,7 @@ const NEED_SLIDE = '請先拉動滑桿';
 const INCOMPLETE_FORMULA = '算式還沒拼完：括號要成對，符號兩邊都要有數字。';
 // 答錯、又沒有對應的回饋時，「還不對」下面的通用提示，不會只剩一句「還不對」。
 const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
-const GUIDE_SUGGESTION = '也可以按『一步一步來』。';
+const GUIDE_SUGGESTION = '也可以按「一步一步來」。';
 const TABLE_RETRY_HINT = '標出來的格子再看一次：每一格之間變化的量一樣嗎？';
 
 /**
