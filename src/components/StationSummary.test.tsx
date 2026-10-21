@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { reviewOf, stations } from '../content/stations';
 import type { StationReview } from '../lib/types';
 import { StationSummary } from './StationSummary';
@@ -22,6 +22,33 @@ const review: StationReview = {
     { kind: 'number', id: 'q2', prompt: '2 + 2 是多少？', answer: 4, explanation: '2 + 2 = 4。' },
   ],
 };
+
+// jsdom 沒有實作 scrollIntoView：換成假的，記錄捲到哪裡、怎麼捲。
+const scrollIntoView = vi.fn<(this: Element, options?: ScrollIntoViewOptions) => void>();
+
+beforeEach(() => {
+  scrollIntoView.mockClear();
+  Element.prototype.scrollIntoView = scrollIntoView;
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+  Reflect.deleteProperty(window, 'matchMedia');
+});
+
+function mockReducedMotion(): void {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
 
 function renderSummary(data: StationReview = review, stationTitle = '測試站') {
   const onStart = vi.fn();
@@ -80,6 +107,54 @@ it('「開始複習」呼叫 onStart，「回到地圖」呼叫 onBack', async (
   await user.click(screen.getByRole('button', { name: '回到地圖' }));
   expect(onBack).toHaveBeenCalledTimes(1);
   expect(onStart).toHaveBeenCalledTimes(1);
+});
+
+it('最上面的「直接做複習題」：焦點移到最下面的「開始複習」並捲過去，不會直接開始', async () => {
+  const { onStart, onBack, user } = renderSummary();
+  const skip = screen.getByRole('button', { name: '直接做複習題' });
+  // 在說明之後、「重點」之前；「開始複習」還是只有一個（捷徑不重複它的名稱）
+  expect(screen.getByText('看完這一站的重點、公式和常見陷阱，再做 2 題複習。').compareDocumentPosition(skip)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  expect(skip.compareDocumentPosition(screen.getByRole('region', { name: '重點' }))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  expect(screen.getAllByRole('button', { name: /開始複習/ })).toHaveLength(1);
+  const start = screen.getByRole('button', { name: '開始複習' });
+
+  await user.click(skip);
+  expect(start).toHaveFocus();
+  expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  expect(scrollIntoView.mock.contexts[0]).toBe(start);
+  expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+  expect(onStart).not.toHaveBeenCalled();
+  expect(onBack).not.toHaveBeenCalled();
+
+  // 焦點在「開始複習」上，按 Enter 就開始
+  await user.keyboard('{Enter}');
+  expect(onStart).toHaveBeenCalledTimes(1);
+});
+
+it('「直接做複習題」用鍵盤也能用：Tab 到它按 Enter 或空白鍵', async () => {
+  const { onStart, user } = renderSummary();
+  const start = screen.getByRole('button', { name: '開始複習' });
+  await user.tab();
+  expect(screen.getByRole('button', { name: '直接做複習題' })).toHaveFocus(); // 頁面上第一個可以按的
+  await user.keyboard('{Enter}');
+  expect(start).toHaveFocus();
+  expect(onStart).not.toHaveBeenCalled();
+
+  // 空白鍵也可以
+  act(() => screen.getByRole('button', { name: '直接做複習題' }).focus());
+  await user.keyboard(' ');
+  expect(start).toHaveFocus();
+  expect(onStart).not.toHaveBeenCalled();
+});
+
+it('減少動態效果：「直接做複習題」直接跳過去，不平滑捲動', async () => {
+  mockReducedMotion();
+  const { user } = renderSummary();
+  await user.click(screen.getByRole('button', { name: '直接做複習題' }));
+  expect(screen.getByRole('button', { name: '開始複習' })).toHaveFocus();
+  expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  expect(scrollIntoView).not.toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+  expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
 });
 
 it('真實的每一站：重點、公式、陷阱一個不少', () => {

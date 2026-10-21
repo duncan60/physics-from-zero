@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { spokenTile } from './components/steps/FormulaInput';
-import { isLastLessonOfStation, reviewAsLesson, reviewLessonId, reviewOf, stationOf, stations } from './content/stations';
+import { isLastLessonOfStation, reviewAsLesson, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './content/stations';
 import { blankCells } from './lib/answer';
 import { emptyStats, lessonXp, recordQuestion } from './lib/game';
 import { PERFECT_BONUS_XP, STORAGE_KEY, XP_PER_FIRST_TRY, XP_PER_LESSON, emptyProgress, localDayKey } from './lib/progress';
@@ -211,8 +211,14 @@ async function playSteps(user: User, lesson: Lesson, options: { missFirst?: bool
     if (isQuestion(step)) stats = recordQuestion(stats, !miss);
   }
   const gained = lessonXp(stats);
-  expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
-  expect(screen.getByText(`本課獲得 ${gained} XP`)).toBeInTheDocument();
+  // 複習的完成畫面寫「完成複習」「本次複習獲得 N XP」，一般的課是「完成這一課」「本課獲得 N XP」
+  if (reviewStationOf(lesson.id) === undefined) {
+    expect(screen.getByRole('heading', { name: '完成這一課' })).toBeInTheDocument();
+    expect(screen.getByText(`本課獲得 ${gained} XP`)).toBeInTheDocument();
+  } else {
+    expect(screen.getByRole('heading', { name: '完成複習' })).toBeInTheDocument();
+    expect(screen.getByText(`本次複習獲得 ${gained} XP`)).toBeInTheDocument();
+  }
   if (options.missFirst === true) expect(screen.queryByText('完美！')).not.toBeInTheDocument();
   else expect(screen.getByText('完美！')).toBeInTheDocument();
   return gained;

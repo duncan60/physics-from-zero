@@ -187,7 +187,14 @@ export default function App(): React.JSX.Element {
     return (
       <>
         <PreviewBanner />
-        <LessonPlayer lesson={lesson} startAt={step - 1} onComplete={ignoreResult} onExit={backToPreview} showReportLinks={false} />
+        <LessonPlayer
+          lesson={lesson}
+          startAt={step - 1}
+          onComplete={ignoreResult}
+          onExit={backToPreview}
+          showReportLinks={false}
+          isReview={reviewStationOf(lesson.id) !== undefined}
+        />
       </>
     );
   }
@@ -206,8 +213,9 @@ export default function App(): React.JSX.Element {
     // 一課，或某一站的複習（review-站號）：複習和課程一樣上課、存進度，只是解鎖規則不同（canOpenLesson 會處理）。
     const lesson = findLesson(route.id);
     if (lesson === undefined) return <Notice kind="missing" message="找不到這一課" onBack={backToMap} />;
+    const isReview = reviewStationOf(lesson.id) !== undefined;
     if (!canOpenLesson(progress, lesson.id)) {
-      const message = reviewStationOf(lesson.id) === undefined ? '這一課還沒解鎖，先完成前面的課' : REVIEW_LOCKED;
+      const message = isReview ? REVIEW_LOCKED : '這一課還沒解鎖，先完成前面的課';
       return <Notice kind="locked" message={message} onBack={backToMap} />;
     }
     return (
@@ -216,6 +224,7 @@ export default function App(): React.JSX.Element {
         onComplete={(result) => finishLesson(lesson.id, result)}
         onExit={backToMap}
         onShowStationSummary={stationSummaryAfter(lesson.id)}
+        isReview={isReview}
       />
     );
   }

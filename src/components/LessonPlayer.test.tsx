@@ -137,6 +137,8 @@ interface RenderOptions {
   startAt?: number;
   /** 傳給 LessonPlayer 的 showReportLinks（預覽頁傳 false）。 */
   showReportLinks?: boolean;
+  /** 傳給 LessonPlayer 的 isReview（App 在上某一站的複習時傳 true）。 */
+  isReview?: boolean;
 }
 
 function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
@@ -144,7 +146,7 @@ function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
   const onExit = vi.fn();
   const user = userEvent.setup({ delay: SETTLE_MS, advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
   const fast = userEvent.setup({ delay: null });
-  const { strict, sound, now, onShowStationSummary, startAt, showReportLinks } = options;
+  const { strict, sound, now, onShowStationSummary, startAt, showReportLinks, isReview } = options;
   function Wrapper(props: { children: ReactNode }): React.JSX.Element {
     const inner =
       sound === undefined ? (
@@ -165,6 +167,7 @@ function renderPlayer(lesson: Lesson, options: RenderOptions = {}) {
       onShowStationSummary={onShowStationSummary}
       startAt={startAt}
       showReportLinks={showReportLinks}
+      isReview={isReview}
     />
   );
   const { rerender, unmount } = render(player, {
@@ -850,6 +853,29 @@ it('沒拿到完美：沒有「完美！」，也沒有完美加分', async () =
   expect(screen.getByText('正確率 50%')).toBeInTheDocument();
   expect(screen.queryByText('完美！')).not.toBeInTheDocument();
   expect(document.querySelector('.lp-confetti')).toBeNull();
+});
+
+it('isReview（某一站的複習）：完成畫面寫「完成複習」和「本次複習獲得 N XP」；isReview 是 false 時和一般的課一樣', async () => {
+  for (const [isReview, title, xpText] of [
+    [true, '完成複習', '本次複習獲得 25 XP'],
+    [false, '完成這一課', '本課獲得 25 XP'],
+  ] as const) {
+    const { user, unmount } = renderPlayer(plainLesson, { isReview });
+    await user.click(screen.getByRole('radio', { name: '選項 A' }));
+    await user.click(button('檢查'));
+    await user.click(button('繼續'));
+    await answerNumber(user, '3 減 0 是多少？', '3');
+
+    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
+    expect(screen.getByText(xpText)).toBeInTheDocument(); // 10 + 5 + 5 + 完美 5
+    expect(screen.getByText('完美！')).toBeInTheDocument();
+    expect(screen.getByText('正確率 100%')).toBeInTheDocument();
+    if (isReview) {
+      expect(screen.queryByRole('heading', { name: '完成這一課' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/本課獲得/)).not.toBeInTheDocument();
+    }
+    unmount();
+  }
 });
 
 it('減少動態效果：完美時照樣顯示「完美！」，但不撒彩紙', async () => {

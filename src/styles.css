@@ -783,6 +783,39 @@ a.path-node:active .path-node-circle {
   line-height: 1.6;
 }
 
+/* 「直接做複習題」：長得像連結的按鈕（不搶「開始複習」的主要按鈕），點擊範圍至少 44px 高；左右多出來的範圍用負邊距抵掉，文字和說明對齊。 */
+.summary-skip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin: 4px 0 0 -6px;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--primary-text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.summary-skip svg {
+  flex: none;
+}
+
+@media (hover: hover) {
+  .summary-skip:hover {
+    background-color: var(--primary-soft);
+  }
+}
+
 .summary-part {
   margin-top: 24px;
 }

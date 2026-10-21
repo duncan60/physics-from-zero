@@ -46,6 +46,8 @@ interface Props {
   startAt?: number;
   /** 每一步下方要不要有「回報問題」連結，預設有。本機預覽頁不要（不該從 localhost 開 issue）。 */
   showReportLinks?: boolean;
+  /** 上的是某一站的複習（review-站號），不是一課：完成畫面寫「完成複習」「本次複習獲得 N XP」。預設 false。 */
+  isReview?: boolean;
   /** 量時間用的時鐘（毫秒），預設 performance.now()；測試換成假的時鐘來控制「花了多久」。 */
   now?: () => number;
 }
@@ -133,24 +135,25 @@ function ExitConfirm(props: { onStay: () => void; onLeave: () => void }): React.
 /**
  * 完成畫面：成績，完美時加上「完美！」和彩紙（減少動態效果時不撒彩紙）。
  * 上完一站的最後一課（有 onShowStationSummary）時，「看本站重點」是主要按鈕：剛上完一站正是整理重點的時候；
- * 複習不是必要的，「回到地圖」一直都在。
+ * 複習不是必要的，「回到地圖」一直都在。複習（isReview）的標題和 XP 那一行寫「複習」，不寫「這一課」「本課」。
  */
 function CompleteView(props: {
   lesson: Lesson;
   result: LessonResult;
+  isReview: boolean;
   onExit: () => void;
   onShowStationSummary?: () => void;
   guard: (action: () => void) => () => void;
 }): React.JSX.Element {
-  const { lesson, result, onExit, onShowStationSummary, guard } = props;
+  const { lesson, result, isReview, onExit, onShowStationSummary, guard } = props;
   const reducedMotion = useReducedMotion();
   return (
     <section className="lp-player" aria-label={lesson.title}>
       {result.perfect && !reducedMotion && <Confetti />}
       <div ref={focusOnMount} tabIndex={-1} className={result.perfect ? 'lp-stage lp-complete lp-complete--perfect' : 'lp-stage lp-complete'}>
-        <h2 className="lp-complete-title">完成這一課</h2>
+        <h2 className="lp-complete-title">{isReview ? '完成複習' : '完成這一課'}</h2>
         {result.perfect && <p className="lp-perfect">完美！</p>}
-        <p className="lp-complete-xp">{`本課獲得 ${result.xp} XP`}</p>
+        <p className="lp-complete-xp">{isReview ? `本次複習獲得 ${result.xp} XP` : `本課獲得 ${result.xp} XP`}</p>
         <ul className="lp-complete-stats">
           <li className="lp-complete-stat lp-complete-stat--accuracy">{`正確率 ${result.accuracy}%`}</li>
           <li className="lp-complete-stat lp-complete-stat--time">{`花了 ${formatDuration(result.durationMs)}`}</li>
@@ -185,7 +188,16 @@ export function LessonPlayer(props: Props): React.JSX.Element {
   return <LessonRun key={`${props.lesson.id}:${props.startAt ?? 0}`} {...props} />;
 }
 
-function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, showReportLinks = true, now = defaultNow }: Props): React.JSX.Element {
+function LessonRun({
+  lesson,
+  onComplete,
+  onExit,
+  onShowStationSummary,
+  startAt,
+  showReportLinks = true,
+  isReview = false,
+  now = defaultNow,
+}: Props): React.JSX.Element {
   const [index, setIndex] = useState(() => firstIndex(startAt, lesson.steps.length));
   const [inGuide, setInGuide] = useState(false);
   // 每從引導回到原題一次就加一，讓原題用新的 key 重新掛載，重新作答。
@@ -291,6 +303,7 @@ function LessonRun({ lesson, onComplete, onExit, onShowStationSummary, startAt, 
       <CompleteView
         lesson={lesson}
         result={{ xp, perfect, accuracy: percent, durationMs }}
+        isReview={isReview}
         onExit={onExit}
         onShowStationSummary={onShowStationSummary}
         guard={guard}
