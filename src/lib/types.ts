@@ -11,7 +11,9 @@ export interface FormulaWrongForm { tokens: string[]; feedback: string }
 // 算對、但寫法比正式寫法省略了什麼（例如省略 + 0）：tokens 要是 accepted 裡的某一種寫法（不是第一個），note 是算式下面一則中性的「提醒」（算式拼對、進到第 2 步時就出現），輕輕說明正式寫法。
 export interface FormulaAcceptedNote { tokens: string[]; note: string }
 // 拼算式 + 算答案：先用 tiles 拼出算式（accepted 任一寫法才算對），再填算出來的數字（answer 等欄位和 NumberStep 一樣）。
-export interface FormulaStep { kind: 'formula'; id: string; prompt: string; tiles: string[]; accepted: string[][]; wrongForms?: FormulaWrongForm[]; acceptedNotes?: FormulaAcceptedNote[]; answer: number; tolerance?: number; unit?: string; wrongAnswers?: WrongAnswer[]; explanation: string; guide?: GuideStep[] }
+// tileLabels（可選）和 tiles 一一對應：每一塊磚塊的小字標示（例如「力」「質量」「月球 g」），沒有標示的是 undefined。
+// 畫面上寫在數字下方，也加進按鈕的名稱（「放入 20（力）」）。同一題裡數值相同的數字磚塊一定要有標示、而且標示不同（內容測試檢查）；標示不能洩漏答案。
+export interface FormulaStep { kind: 'formula'; id: string; prompt: string; tiles: string[]; tileLabels?: (string | undefined)[]; accepted: string[][]; wrongForms?: FormulaWrongForm[]; acceptedNotes?: FormulaAcceptedNote[]; answer: number; tolerance?: number; unit?: string; wrongAnswers?: WrongAnswer[]; explanation: string; guide?: GuideStep[] }
 export interface SliderStep { kind: 'slider'; id: string; prompt: string; quantity: string; unit: string; min: number; max: number; step: number; initial: number; answer: number; tolerance?: number; tooLow: string; tooHigh: string; explanation: string; anim: 'cart'; guide?: GuideStep[] }
 export interface MatchPair { left: string; right: string }
 export interface MatchStep { kind: 'match'; id: string; prompt: string; pairs: MatchPair[]; explanation: string } // 沒有 guide、沒有看解答

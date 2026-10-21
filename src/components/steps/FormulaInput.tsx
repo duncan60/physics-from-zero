@@ -19,6 +19,32 @@ export function spokenTile(value: string): string {
   return SPOKEN[value] ?? value;
 }
 
+/**
+ * 一塊磚的按鈕名稱（不含「放入」「拿回」）：念出來的名稱，有標示時接在後面用全形括號，
+ * 例如「20（力）」；沒有標示就是 spokenTile，例如「除以」。
+ */
+export function tileName(value: string, label: string | undefined): string {
+  return hasLabel(label) ? `${spokenTile(value)}（${label}）` : spokenTile(value);
+}
+
+function hasLabel(label: string | undefined): label is string {
+  return label !== undefined && label.trim() !== '';
+}
+
+/** 磚塊上的字：數字或符號，有標示時在下面加一行小字。空位用同一個內容（看不見），大小才會一樣。 */
+function TileFace(props: { value: string; label: string | undefined }): React.JSX.Element {
+  const { value, label } = props;
+  return (
+    <>
+      {value}
+      {hasLabel(label) && <span className="lp-tile-label">{label}</span>}
+    </>
+  );
+}
+
+/** 磚塊上方固定的一行操作說明。 */
+export const FORMULA_HELP = '點方塊放進算式，點算式裡的方塊可以拿回來';
+
 /** 一串磚塊念出來的樣子，用空白隔開，例如「左括號 6 加 18 右括號 除以 2」。 */
 export function spokenFormula(tokens: string[]): string {
   return tokens.map(spokenTile).join(' ');
@@ -32,17 +58,19 @@ type FocusTarget = { area: 'bank'; tile: number } | { area: 'row'; position: num
  * 所以兩塊一樣的「20」各自獨立：每一塊最多放一次，拿回來時回到它自己在下方的位置。
  *
  * 點下方的磚塊 → 放到答案列最後面；點答案列的磚塊 → 拿回去。放上去的磚塊在下方留一個空位，
- * 其他磚塊不會跟著移動。`mark` 是 'correct' 時算式已經鎖定，下方的磚塊收起來。
+ * 其他磚塊不會跟著移動。`mark` 是 'correct' 時算式已經鎖定，下方的磚塊和上方的操作說明都收起來。
+ * `labels`（和 tiles 一一對應，可選）：磚塊的小字標示，寫在數字下面，也加進按鈕名稱（「放入 20（力）」）。
  */
 export function FormulaInput(props: {
   tiles: string[];
+  labels?: (string | undefined)[];
   placed: number[];
   onChange: (placed: number[]) => void;
   disabled: boolean;
   mark: 'correct' | 'wrong' | null;
   describedBy?: string;
 }): React.JSX.Element {
-  const { tiles, placed, onChange, disabled, mark, describedBy } = props;
+  const { tiles, labels, placed, onChange, disabled, mark, describedBy } = props;
   const rowRef = useRef<HTMLDivElement>(null);
   const bankRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<FocusTarget | null>(null);
@@ -80,8 +108,11 @@ export function FormulaInput(props: {
 
   const classes = ['lp-formula'];
   if (mark) classes.push(`lp-formula--${mark}`);
+  const name = (tile: number): string => tileName(tiles[tile], labels?.[tile]);
+  const locked = mark === 'correct';
   return (
     <div className={classes.join(' ')}>
+      {!locked && <p className="lp-formula-help">{FORMULA_HELP}</p>}
       {/* tabIndex=-1：「再試一次」和磚塊放完時，焦點移到這裡，螢幕閱讀器會念出「你的算式」和目前拼的內容。 */}
       <div ref={rowRef} tabIndex={-1} className="lp-formula-row" role="group" aria-label="你的算式" aria-describedby={describedBy}>
         {placed.map((tile, position) => (
@@ -90,21 +121,21 @@ export function FormulaInput(props: {
             type="button"
             className="lp-tile"
             disabled={disabled}
-            aria-label={disabled ? spokenTile(tiles[tile]) : `拿回 ${spokenTile(tiles[tile])}`}
+            aria-label={disabled ? name(tile) : `拿回 ${name(tile)}`}
             onClick={() => remove(position)}
             style={TILE_STYLE}
           >
-            {tiles[tile]}
+            <TileFace value={tiles[tile]} label={labels?.[tile]} />
           </button>
         ))}
       </div>
-      {mark !== 'correct' && (
+      {!locked && (
         <div ref={bankRef} className="lp-tile-bank" role="group" aria-label="磚塊">
           {tiles.map((value, tile) =>
             used.has(tile) ? (
               // 空位：和磚塊一樣大，其他磚塊不會移動；螢幕閱讀器略過
               <span key={tile} className="lp-tile lp-tile--ghost" aria-hidden="true" style={TILE_STYLE}>
-                {value}
+                <TileFace value={value} label={labels?.[tile]} />
               </span>
             ) : (
               <button
@@ -113,11 +144,11 @@ export function FormulaInput(props: {
                 className="lp-tile"
                 data-tile={tile}
                 disabled={disabled}
-                aria-label={disabled ? spokenTile(value) : `放入 ${spokenTile(value)}`}
+                aria-label={disabled ? name(tile) : `放入 ${name(tile)}`}
                 onClick={() => place(tile)}
                 style={TILE_STYLE}
               >
-                {value}
+                <TileFace value={value} label={labels?.[tile]} />
               </button>
             ),
           )}

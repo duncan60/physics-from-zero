@@ -108,6 +108,8 @@ const forceAndAcceleration: Lesson = {
       id: 'full-cart-accel',
       prompt: '滿車質量 20 公斤，假設沒有摩擦力，一樣用 20 N 推，加速度是多少？',
       tiles: ['10', '20', '20', '−', '×', '÷'],
+      // 兩塊 20 一個是力、一個是滿車的質量；10 是前一題空車的質量（陷阱）。
+      tileLabels: ['空車質量', '力', '滿車質量', undefined, undefined, undefined],
       accepted: [['20', '÷', '20']],
       wrongForms: [
         {

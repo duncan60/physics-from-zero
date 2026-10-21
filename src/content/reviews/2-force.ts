@@ -105,6 +105,8 @@ const forceReview: StationReview = {
       id: 'bus-brake-size',
       prompt: '同一台公車連乘客共 6000 公斤，煞車時速度每秒減少 2 公尺/秒，也就是加速度是 −2 公尺/秒²。讓它慢下來的力有多大？',
       tiles: ['2', '10', '6000', '+', '×', '÷'],
+      // 10 沒有寫在題目裡，是地球的 g（陷阱：算出來的是重量）；其他數字也一起標，不會只標陷阱。
+      tileLabels: ['加速度大小', '地球 g', '質量', undefined, undefined, undefined],
       accepted: [['6000', '×', '2']],
       wrongForms: [
         {

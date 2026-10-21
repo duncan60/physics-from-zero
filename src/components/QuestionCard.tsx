@@ -80,7 +80,10 @@ function solutionLines(step: QuestionStep): SolutionLine[] {
  * 拼算式分兩步：先拼算式（拼對了才出現第 2 步），再填算出來的數字；兩步都在「作答中」這個階段裡。
  * `onFinish(cleanFirstTry)`：第一次檢查就答對、也沒有看解答時是 true（拼算式要兩步都第一次就對）。輸入無效（沒填、沒選、沒拼、滑桿沒拉過）不算一次作答。
  * 只有同時傳入 `onRequestGuide`、題目也有 `guide` 時，答錯才會出現「一步一步來」；否則是「再試一次」。
- * 按「一步一步來」時，拼算式如果已經拼對（在第 2 步答錯），`onRequestGuide` 會收到拼好的算式（tiles 的索引），否則是 null。
+ * `guideCompleted`：這一題的引導已經走完過一次。這時答錯的主要按鈕改回「再試一次」，引導變成次要按鈕「再看一次引導」（和「看解答」並排），
+ * 不會每答錯一次就整套重來。
+ * 按「一步一步來」（或「再看一次引導」）時，拼算式如果已經拼對（在第 2 步答錯），`onRequestGuide` 會收到拼好的算式（tiles 的索引），否則是 null。
+ * 拼算式在第 1 步答錯、按「再試一次」：答案列清空，磚塊全部回到下方原本的位置，重新拼；第 2 步答錯時算式已經拼對、鎖定，不會清掉。
  * 引導結束、這一題重新出現時，把它傳回 `builtFormula`：算式一開始就放在答案列上、鎖定，直接從第 2 步開始，不用重拼。
  * `onCheck(outcome)`：每次按「檢查」、答案有效（不論對錯）時呼叫，告訴外面這次的結果：
  * 答對是 'correct'、答錯是 'wrong'；拼算式第 1 步拼對了（還要算答案）是 'partial'。
@@ -91,8 +94,9 @@ export function QuestionCard(props: {
   onRequestGuide?: (builtFormula: number[] | null) => void;
   onCheck?: (outcome: CheckOutcome) => void;
   builtFormula?: number[] | null;
+  guideCompleted?: boolean;
 }): React.JSX.Element {
-  const { step, onFinish, onRequestGuide, onCheck } = props;
+  const { step, onFinish, onRequestGuide, onCheck, guideCompleted = false } = props;
   // 只有拼算式用得到：其他題型給了也不理。
   const builtFormula = step.kind === 'formula' ? (props.builtFormula ?? null) : null;
   const promptId = useId();
@@ -124,8 +128,11 @@ export function QuestionCard(props: {
   // 從引導回來、算式已經放在答案列上時也看得到。只是多一句話，不改變對錯、也不影響「第一次就答對」。
   const formulaNote = step.kind === 'formula' && formulaDone ? acceptedNote(step, placed.map((tile) => step.tiles[tile])) : null;
   const requestGuide = step.guide !== undefined && step.guide.length > 0 ? onRequestGuide : undefined;
-  // 「還不對」下面那一句：題目給的回饋優先，沒有的話用通用提示（提不提「一步一步來」跟著按鈕有沒有出現）。
-  const wrongText = feedback ?? retryHint(step, formulaDone, requestGuide !== undefined);
+  // 引導還沒走完過：答錯時主要按鈕是「一步一步來」。走完過了：主要按鈕是「再試一次」，引導改成次要按鈕「再看一次引導」。
+  const guideFirst = guideCompleted ? undefined : requestGuide;
+  const guideAgain = guideCompleted ? requestGuide : undefined;
+  // 「還不對」下面那一句：題目給的回饋優先，沒有的話用通用提示（提不提「一步一步來」跟著那顆按鈕有沒有出現）。
+  const wrongText = feedback ?? retryHint(step, formulaDone, guideFirst !== undefined);
 
   // 檢查之後，焦點移到主要按鈕（從輸入框按 Enter 檢查時，輸入框會被停用）。
   useEffect(() => {
@@ -220,7 +227,14 @@ export function QuestionCard(props: {
   function retry(): void {
     setPhase('answering');
     setFeedback(null);
+    // 拼算式的第 1 步：答案列清空，磚塊全部回到下方原本的位置（第 2 步的算式已經拼對、鎖定，留著）。
+    if (step.kind === 'formula' && !formulaDone) setPlaced([]);
     setRetries((n) => n + 1);
+  }
+
+  /** 進引導時要帶走的算式：拼對了（在第 2 步）才帶，回來時直接從第 2 步接著做。 */
+  function builtSoFar(): number[] | null {
+    return formulaDone ? placed : null;
   }
 
   function editTable(index: number, raw: string): void {
@@ -293,6 +307,7 @@ export function QuestionCard(props: {
             </h2>
             <FormulaInput
               tiles={step.tiles}
+              labels={step.tileLabels}
               placed={placed}
               onChange={(next) => {
                 setPlaced(next);
@@ -361,7 +376,7 @@ export function QuestionCard(props: {
   if (phase === 'answering') primary = { label: '檢查', action: check };
   else if (phase === 'correct') primary = { label: '繼續', action: () => onFinish(!hadWrong) };
   else if (phase === 'revealed') primary = { label: '繼續', action: () => onFinish(false) };
-  else if (requestGuide) primary = { label: '一步一步來', action: () => requestGuide(formulaDone ? placed : null) };
+  else if (guideFirst) primary = { label: '一步一步來', action: () => guideFirst(builtSoFar()) };
   else primary = { label: '再試一次', action: retry };
 
   const solution = solutionLines(step);
@@ -414,6 +429,11 @@ export function QuestionCard(props: {
         <button ref={primaryRef} type="button" {...guard(() => primary.action(), 'lp-button lp-button--primary')}>
           {primary.label}
         </button>
+        {phase === 'wrong' && guideAgain && (
+          <button type="button" {...guard(() => guideAgain(builtSoFar()), 'lp-button lp-button--secondary')}>
+            再看一次引導
+          </button>
+        )}
         {phase === 'wrong' && (
           <button type="button" {...guard(() => setPhase('revealed'), 'lp-button lp-button--secondary')}>
             看解答

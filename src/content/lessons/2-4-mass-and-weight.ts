@@ -70,6 +70,8 @@ const massAndWeight: Lesson = {
       id: 'moon-weight',
       prompt: '同一顆 1 公斤的鐵球在月球上，重量是幾 N？月球的 g 約 1.6 公尺/秒²。',
       tiles: ['1', '1.6', '10', '+', '×', '÷'],
+      // 10 沒有寫在題目裡，是觀念卡上地球的 g（陷阱），標出來才知道它是什麼。
+      tileLabels: ['質量', '月球 g', '地球 g', undefined, undefined, undefined],
       accepted: [['1', '×', '1.6']],
       wrongForms: [
         {

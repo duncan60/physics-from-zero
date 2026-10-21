@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-import { spokenTile } from './components/steps/FormulaInput';
+import { tileName } from './components/steps/FormulaInput';
 import { isLastLessonOfStation, reviewAsLesson, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './content/stations';
 import { blankCells } from './lib/answer';
 import { emptyStats, lessonXp, recordQuestion } from './lib/game';
@@ -174,7 +174,13 @@ async function playStep(user: User, step: Step): Promise<void> {
       break;
     case 'formula': {
       const bank = screen.getByRole('group', { name: '磚塊' });
-      for (const token of step.accepted[0]) await user.click(within(bank).getAllByRole('button', { name: `放入 ${spokenTile(token)}` })[0]);
+      // 依數值找下方還沒用到的第一塊；有標示的磚塊，名稱是「放入 20（力）」
+      const used = new Set<number>();
+      for (const token of step.accepted[0]) {
+        const tile = step.tiles.findIndex((value, i) => value === token && !used.has(i));
+        used.add(tile);
+        await user.click(within(bank).getAllByRole('button', { name: `放入 ${tileName(token, step.tileLabels?.[tile])}` })[0]);
+      }
       await user.click(button('檢查'));
       expect(screen.queryByText('還不對'), `${step.id}：算式沒有拼對`).not.toBeInTheDocument();
       await user.type(screen.getByRole('textbox', { name: /第 2 步：算出答案/ }), String(step.answer));

@@ -11,7 +11,6 @@ import { ReportLink } from './ReportLink';
 import { useSound } from './SoundContext';
 import { ConceptView } from './steps/ConceptView';
 import { useActionGuard } from './useActionGuard';
-import type { Guard } from './useActionGuard';
 import { useReducedMotion } from './useReducedMotion';
 
 /** 上完一課的成績：完成畫面出現時交給 `onComplete`。 */
@@ -144,10 +143,11 @@ function CompleteView(props: {
   isReview: boolean;
   onExit: () => void;
   onShowStationSummary?: () => void;
-  guard: Guard;
 }): React.JSX.Element {
-  const { lesson, result, isReview, onExit, onShowStationSummary, guard } = props;
+  const { lesson, result, isReview, onExit, onShowStationSummary } = props;
   const reducedMotion = useReducedMotion();
+  // 最後一題連點「繼續」時，第二下不會直接按到「回到地圖」，一路按出這一課（進度在完成畫面出現時就回報了）。
+  const guard = useActionGuard();
   return (
     <section className="lp-player" aria-label={lesson.title}>
       {result.perfect && !reducedMotion && <Confetti />}
@@ -178,6 +178,7 @@ function CompleteView(props: {
  * 一課的流程：一次一個步驟，上方是「離開」、課程名稱和進度條（連續答對 COMBO_START 題起，旁邊顯示「連續答對 N 題！」），
  * 最後是完成畫面。每一題結束時用 lib/game 的 recordQuestion 記錄是不是一次答對（沒有答錯過、沒有用引導、沒有看解答）；
  * 觀念卡和動畫不算題目。XP、完美、正確率都由這份統計算出來。
+ * 引導：第一次答錯時主要按鈕是「一步一步來」；同一題的引導走完一次之後再答錯，改成「再試一次」，旁邊有「再看一次引導」和「看解答」。
  * 音效（有 SoundProvider 而且開著時）：答對 correct、答錯 wrong、完成畫面出現 complete，都在使用者按下按鈕的當下播放。
  */
 export function LessonPlayer(props: Props): React.JSX.Element {
@@ -204,6 +205,8 @@ function LessonRun({
   const [builtFormula, setBuiltFormula] = useState<number[] | null>(null);
   // 這一題答錯過（之後才會有引導、看解答），就不是一次答對；連續答對在畫面上也馬上中斷，不等這一題結束。
   const [missed, setMissed] = useState(false);
+  // 這一題的引導已經走完過一次：之後再答錯，主要按鈕是「再試一次」，不再整套重來（還是可以按「再看一次引導」）。換下一步時清掉。
+  const [guideDone, setGuideDone] = useState(false);
   // 只算題目的作答統計，每一題結束時更新。
   const [stats, setStats] = useState<RunStats>(emptyStats);
   // 剛答對：題目區小彈跳（動畫在 CSS，減少動態效果時不動）。換步驟時清掉。
@@ -218,8 +221,6 @@ function LessonRun({
   const titleId = useId();
   const reported = useRef(false);
   const play = useSound();
-  // 完成畫面的「回到地圖」：最後一題連點「繼續」時，不會一路按出這一課（進度在完成畫面出現時就回報了）。
-  const guard = useActionGuard(index);
 
   const total = lesson.steps.length;
   const step = lesson.steps[index] as Step | undefined;
@@ -251,6 +252,7 @@ function LessonRun({
     setAttempt(0);
     setBuiltFormula(null);
     setMissed(false);
+    setGuideDone(false);
     setBounce(false);
   }
 
@@ -281,6 +283,7 @@ function LessonRun({
 
   function finishGuide(): void {
     setInGuide(false);
+    setGuideDone(true);
     setAttempt((n) => n + 1);
   }
 
@@ -303,7 +306,6 @@ function LessonRun({
         isReview={isReview}
         onExit={onExit}
         onShowStationSummary={onShowStationSummary}
-        guard={guard}
       />
     );
   }
@@ -339,6 +341,7 @@ function LessonRun({
             onRequestGuide={startGuide}
             onCheck={handleCheck}
             builtFormula={builtFormula}
+            guideCompleted={guideDone}
           />
         );
     }

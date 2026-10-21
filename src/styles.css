@@ -1719,6 +1719,14 @@ a.path-node:active .path-node-circle {
   touch-action: manipulation;
 }
 
+/* 磚塊上方固定的一行操作說明：小字，窄螢幕自動換行 */
+.lp-formula-help {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 /* 答案列：拼好的磚塊依序排在這裡 */
 .lp-formula-row {
   display: flex;
@@ -1777,6 +1785,7 @@ a.path-node:active .path-node-circle {
 .lp-tile {
   appearance: none;
   display: inline-flex;
+  flex-direction: column; /* 有標示時，標示在數字下面 */
   align-items: center;
   justify-content: center;
   /* 最小寬高由 FormulaInput 的 style 設定 */
@@ -1827,6 +1836,23 @@ a.path-node:active .path-node-circle {
   color: transparent;
   cursor: default;
   user-select: none;
+}
+
+/* 磚塊的標示（例如「力」「月球 g」）：數字下面一行小字。標示長的時候在磚塊裡換行，不把磚塊撐得太寬 */
+.lp-tile-label {
+  max-width: 6em;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.lp-tile--ghost .lp-tile-label {
+  color: transparent;
 }
 
 /* ---- 拉滑桿 ---- */

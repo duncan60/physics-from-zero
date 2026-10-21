@@ -1348,13 +1348,40 @@ it('回饋出現後，按鈕先淡色（aria-disabled）一下：點了沒反應
   expect(screen.getByText('2 + 2 是多少？')).toBeInTheDocument();
 });
 
-it('觀念卡的「繼續」剛出現時也是淡色，時間到恢復', () => {
-  renderPlayer(conceptsLesson);
-  expect(button('繼續')).toHaveAttribute('aria-disabled', 'true');
-  expect(button('繼續')).toHaveClass('lp-button--guarded');
+/** 按鈕看起來和平常一樣：沒有變淡、沒有 aria-disabled。 */
+function expectNotDimmed(element: HTMLElement): void {
+  expect(element).not.toHaveAttribute('aria-disabled');
+  expect(element).not.toHaveClass('lp-button--guarded');
+}
+
+it('每一張新的卡剛出現時，按鈕不變淡（沒有 aria-disabled），不會一出現就閃一下；連點的第二下照樣擋得住', async () => {
+  const { fast } = renderPlayer(conceptsLesson);
+  expectNotDimmed(button('繼續'));
   settle();
-  expect(button('繼續')).not.toHaveAttribute('aria-disabled');
-  expect(button('繼續')).not.toHaveClass('lp-button--guarded');
+
+  await fast.click(button('繼續'));
+  // 第二張觀念卡：一出現就是一般的樣子，但這一下（連點的第二下）不算
+  expectNotDimmed(button('繼續'));
+  await fast.click(button('繼續'));
+  expect(screen.getByText('第二張卡。')).toBeInTheDocument();
+
+  settle();
+  await fast.click(button('繼續'));
+  // 新的一題：「檢查」不變淡，連點也按不到
+  expectNotDimmed(button('檢查'));
+  await fast.click(button('檢查'));
+  expect(screen.queryByText('請先選一個答案')).not.toBeInTheDocument();
+});
+
+it('完成畫面剛出現時，「回到地圖」不變淡；連點也不會直接按到', async () => {
+  const { user, fast, onExit } = renderPlayer(plainLesson);
+  await playPlainLesson(user, fast);
+  expectNotDimmed(button('回到地圖'));
+  await fast.click(button('回到地圖'));
+  expect(onExit).not.toHaveBeenCalled();
+  settle();
+  await fast.click(button('回到地圖'));
+  expect(onExit).toHaveBeenCalledTimes(1);
 });
 
 it('數字題答錯、沒有對應的回饋：「還不對」加上通用提示（沒有引導時不提「一步一步來」）', async () => {
@@ -1410,4 +1437,137 @@ it('沒有單位的數字題：格式提示不說「單位已經寫好了」', (
   expect(screen.getByText(FORMAT_HINT_NO_UNIT)).toBeInTheDocument();
   expect(screen.queryByText(FORMAT_HINT)).not.toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: '1 + 2 是多少？' })).toHaveAccessibleDescription(FORMAT_HINT_NO_UNIT);
+});
+
+// ---- 試玩回饋：引導走完一次之後，再答錯不會整套重來 ----
+
+/** 兩題有引導的數字題（各有一個已知錯誤答案），測「引導走完過」是每一題各自記的。 */
+const twoGuidedLesson: Lesson = {
+  id: 'test-two-guided',
+  title: '測試兩題引導',
+  steps: [
+    {
+      kind: 'number',
+      id: 'speed',
+      prompt: '10 秒走 50 公尺，速度是多少？',
+      answer: 5,
+      unit: '公尺/秒',
+      wrongAnswers: [{ value: 500, feedback: '500 是 50 × 10，速度要用除的。' }],
+      explanation: '50 ÷ 10 = 5 公尺/秒。',
+      guide: [{ kind: 'number', id: 'speed-guide', prompt: '50 ÷ 10 是多少？', answer: 5, explanation: '50 ÷ 10 = 5。' }],
+    },
+    {
+      kind: 'number',
+      id: 'time',
+      prompt: '每秒 5 公尺走 20 公尺，要幾秒？',
+      answer: 4,
+      unit: '秒',
+      explanation: '20 ÷ 5 = 4 秒。',
+      guide: [{ kind: 'concept', id: 'time-guide', body: ['時間 = 距離 ÷ 速度。'] }],
+    },
+  ],
+};
+
+const speedInput = () => screen.getByRole('textbox', { name: '10 秒走 50 公尺，速度是多少？' });
+
+/** 第一題答錯 → 一步一步來 → 引導裡答對 → 回到原題。 */
+async function finishSpeedGuide(user: User, wrong: string): Promise<void> {
+  await user.type(speedInput(), wrong);
+  await user.click(button('檢查'));
+  await user.click(button('一步一步來'));
+  await user.type(screen.getByRole('textbox', { name: '50 ÷ 10 是多少？' }), '5');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(speedInput()).toBeInTheDocument();
+}
+
+it('引導走完一次之後再答錯：主要按鈕是「再試一次」，次要按鈕是「再看一次引導」和「看解答」；第一次答錯照舊是「一步一步來」', async () => {
+  const { user } = renderPlayer(twoGuidedLesson);
+
+  // 第一次答錯：照舊
+  await user.type(speedInput(), '500');
+  await user.click(button('檢查'));
+  expect(button('一步一步來')).toHaveFocus();
+  expect(queryButton('再試一次')).not.toBeInTheDocument();
+  expect(queryButton('再看一次引導')).not.toBeInTheDocument();
+  await user.click(button('一步一步來'));
+  await user.type(screen.getByRole('textbox', { name: '50 ÷ 10 是多少？' }), '5');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  // 回到原題又答錯：不再整套重來
+  await user.type(speedInput(), '500');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText('500 是 50 × 10，速度要用除的。')).toBeInTheDocument();
+  expect(queryButton('一步一步來')).not.toBeInTheDocument();
+  const actions = screen.getAllByRole('button').filter((b) => b.closest('.lp-actions') !== null).map((b) => b.textContent);
+  expect(actions).toEqual(['再試一次', '再看一次引導', '看解答']);
+  expect(button('再試一次')).toHaveClass('lp-button--primary');
+  expect(button('再看一次引導')).toHaveClass('lp-button--secondary');
+  expect(button('看解答')).toHaveClass('lp-button--secondary');
+  expect(button('再試一次')).toHaveFocus();
+
+  // 再試一次：留在原題，保留剛才的輸入
+  await user.click(button('再試一次'));
+  expect(speedInput()).toHaveValue('500');
+  expect(speedInput()).toHaveFocus();
+  expect(screen.queryByText('50 ÷ 10 是多少？')).not.toBeInTheDocument();
+});
+
+it('引導走完一次之後再答錯，按「再看一次引導」會重新進入引導；走完回到原題，之後再答錯一樣是「再試一次」', async () => {
+  const { user } = renderPlayer(twoGuidedLesson);
+  await finishSpeedGuide(user, '500');
+
+  await user.type(speedInput(), '7');
+  await user.click(button('檢查'));
+  await user.click(button('再看一次引導'));
+  expect(screen.queryByText('10 秒走 50 公尺，速度是多少？')).not.toBeInTheDocument();
+  await user.type(screen.getByRole('textbox', { name: '50 ÷ 10 是多少？' }), '5');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+
+  // 回到原題（重新開始），再答錯：還是「再試一次」
+  expect(speedInput()).toHaveValue('');
+  await user.type(speedInput(), '7');
+  await user.click(button('檢查'));
+  expect(button('再試一次')).toBeInTheDocument();
+  expect(button('再看一次引導')).toBeInTheDocument();
+  expect(queryButton('一步一步來')).not.toBeInTheDocument();
+});
+
+it('引導走完一次之後再答錯、沒有對應的回饋：通用提示不再叫人按「一步一步來」（畫面上沒有那顆按鈕）', async () => {
+  const { user } = renderPlayer(twoGuidedLesson);
+  await finishSpeedGuide(user, '7');
+  await user.type(speedInput(), '7');
+  await user.click(button('檢查'));
+  expect(screen.getByText(NUMBER_RETRY_HINT)).toBeInTheDocument();
+  expect(screen.queryByText(NUMBER_GUIDE_HINT)).not.toBeInTheDocument();
+  expect(queryButton('一步一步來')).not.toBeInTheDocument();
+});
+
+it('引導走完一次之後答對：這一題仍然不算一次答對；下一題第一次答錯時照舊是「一步一步來」', async () => {
+  const { user, onComplete } = renderPlayer(twoGuidedLesson);
+  await finishSpeedGuide(user, '500');
+  await user.type(speedInput(), '500');
+  await user.click(button('檢查'));
+  await user.click(button('再試一次'));
+  await user.clear(speedInput());
+  await user.type(speedInput(), '5');
+  await user.click(button('檢查'));
+  expect(screen.getByText('答對了')).toBeInTheDocument();
+  await user.click(button('繼續'));
+
+  // 下一題：「引導走完過」不會帶過來
+  const time = screen.getByRole('textbox', { name: '每秒 5 公尺走 20 公尺，要幾秒？' });
+  await user.type(time, '100');
+  await user.click(button('檢查'));
+  expect(button('一步一步來')).toBeInTheDocument();
+  expect(queryButton('再看一次引導')).not.toBeInTheDocument();
+  expect(screen.getByText(NUMBER_GUIDE_HINT)).toBeInTheDocument();
+  await user.click(button('看解答'));
+  await user.click(button('繼續'));
+
+  // 兩題都不是一次答對：只有基本的 10 XP
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 10, perfect: false, accuracy: 0 }));
 });

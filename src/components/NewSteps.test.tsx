@@ -7,7 +7,7 @@ import { LessonPlayer } from './LessonPlayer';
 import { MatchCard } from './MatchCard';
 import { QuestionCard } from './QuestionCard';
 import { SoundProvider } from './SoundContext';
-import { spokenTile } from './steps/FormulaInput';
+import { spokenTile, tileName } from './steps/FormulaInput';
 
 // 測試專用的題目，不依賴真實課程內容。
 
@@ -136,9 +136,14 @@ function expectTappable(element: HTMLElement): void {
 /** 一個區域裡每顆按鈕的名稱，依畫面上的順序。 */
 const names = (container: HTMLElement) => within(container).queryAllByRole('button').map((b) => b.getAttribute('aria-label'));
 
-/** 依序點下方第一塊還能用的磚塊。 */
+/** 「放入 20」或有標示的「放入 20（力）」都算：數值是 token 的磚塊。 */
+function placeName(token: string): RegExp {
+  return new RegExp(`^放入 ${spokenTile(token).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(（.+）)?$`);
+}
+
+/** 依序點下方第一塊還能用的磚塊（有標示的磚塊也一樣，看的是數值）。 */
 async function build(user: User, tokens: string[]): Promise<void> {
-  for (const token of tokens) await user.click(within(bank()).getAllByRole('button', { name: `放入 ${spokenTile(token)}` })[0]);
+  for (const token of tokens) await user.click(within(bank()).getAllByRole('button', { name: placeName(token) })[0]);
 }
 
 /** 拼出正確算式並檢查，停在第 2 步。 */
@@ -232,11 +237,12 @@ it('拼算式：拼成已知錯誤算式 → 「還不對」與那則回饋；�
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText(INCOMPLETE)).toBeInTheDocument();
   expect(screen.queryByText('力除以質量，不是乘。')).not.toBeInTheDocument();
+  // 再試一次：答案列清空，磚塊全部回到下方
   await user.click(button('再試一次'));
-  await user.click(button('拿回 減'));
+  expect(names(row())).toEqual([]);
 
   // 已知的錯誤算式：「還不對」加上那則回饋；按鈕和現有的題目一樣
-  await build(user, ['×', '20']);
+  await build(user, ['20', '×', '20']);
   await user.click(button('檢查'));
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText('力除以質量，不是乘。')).toBeInTheDocument();
@@ -248,13 +254,12 @@ it('拼算式：拼成已知錯誤算式 → 「還不對」與那則回饋；�
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   for (const tile of within(row()).getAllByRole('button')) expect(tile).toBeDisabled(); // 檢查完先不能動
 
-  // 再試一次：剛才拼的還在，焦點回到答案列；把「× 20」換成「÷ 20」
+  // 再試一次：答案列清空，每一塊都回到下方它自己原本的位置；焦點回到答案列，重新拼
   await user.click(button('再試一次'));
   expect(row()).toHaveFocus();
-  expect(names(row())).toEqual(['拿回 20', '拿回 乘', '拿回 20']);
-  await user.click(button('拿回 乘'));
-  await user.click(within(row()).getAllByRole('button')[1]);
-  await build(user, ['÷', '20']);
+  expect(names(row())).toEqual([]);
+  expect(names(bank())).toEqual(['放入 20', '放入 乘', '放入 20', '放入 除以', '放入 10', '放入 減']);
+  await build(user, ['20', '÷', '20']);
   expect(screen.queryByRole('heading', { name: '第 2 步：算出答案' })).not.toBeInTheDocument();
   await user.click(button('檢查'));
 
@@ -287,8 +292,7 @@ it('拼算式：兩步都第一次就對 → onFinish(true)；任何一步錯過
   await build(card.user, ['20', '×', '20']);
   await card.user.click(button('檢查'));
   await card.user.click(button('再試一次'));
-  for (let i = 0; i < 3; i++) await card.user.click(within(row()).getAllByRole('button')[0]);
-  expect(names(row())).toEqual([]);
+  expect(names(row())).toEqual([]); // 再試一次就清空了，不用一塊一塊拿回來
   await card.user.type(await solveFormula(card.user), '1');
   await card.user.click(button('檢查'));
   expect(screen.getByText('答對了')).toBeInTheDocument();
@@ -776,10 +780,15 @@ it('LessonPlayer：拼算式第 2 步答錯 → 一步一步來 → 回到原題
   expect(screen.queryByText('還不對')).not.toBeInTheDocument();
   expect(button('檢查')).toBeInTheDocument();
 
-  // 再答錯一次，一步一步來之後回來，算式也一樣還在
+  // 再答錯一次：引導已經走完過，主要按鈕是「再試一次」（算式還是鎖定在答案列）；按「再看一次引導」之後回來，算式也一樣還在
   await user.type(input, '400');
   await user.click(button('檢查'));
-  await user.click(button('一步一步來'));
+  expect(queryButton('一步一步來')).not.toBeInTheDocument();
+  await user.click(button('再試一次'));
+  expect(names(row())).toEqual(['20', '除以', '20']);
+  expect(input).toHaveValue('400');
+  await user.click(button('檢查'));
+  await user.click(button('再看一次引導'));
   await user.type(screen.getByRole('textbox', { name: '20 ÷ 20 是多少？' }), '1');
   await user.click(button('檢查'));
   await user.click(button('繼續'));
@@ -1083,4 +1092,135 @@ it('拼算式第 1 步答錯（沒有對應的回饋）：維持原樣，不出�
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument();
   expect(screen.queryByText(FORMAT_HINT)).not.toBeInTheDocument(); // 還沒有數字輸入框
+});
+
+// ---- 試玩回饋：拼算式的操作說明、再試一次清空、方塊標示 ----
+
+const HELP = '點方塊放進算式，點算式裡的方塊可以拿回來';
+
+it('tileName：有標示時接在念出來的名稱後面，用全形括號；沒有標示就是念出來的名稱', () => {
+  expect(tileName('20', '力')).toBe('20（力）');
+  expect(tileName('1.6', '月球 g')).toBe('1.6（月球 g）');
+  expect(tileName('20', undefined)).toBe('20');
+  expect(tileName('÷', undefined)).toBe('除以');
+  expect(tileName('(', '先算')).toBe('左括號（先算）');
+});
+
+/** 和 formulaStep 一樣，但兩塊「20」分別標示「力」「質量」，陷阱「10」標示「空車質量」。 */
+const labelledStep: FormulaStep = {
+  ...formulaStep,
+  id: 'cart-accel-labelled',
+  tileLabels: ['力', undefined, '質量', undefined, '空車質量', undefined],
+};
+
+it('拼算式：磚塊上方一直有一行操作說明；算式拼對、磚塊收起來之後就不需要了', async () => {
+  const { user } = renderCard(formulaStep);
+  const help = screen.getByText(HELP);
+  expect(help).toBeVisible();
+  // 說明在答案列和磚塊的上方
+  expect(help.compareDocumentPosition(row()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(help.compareDocumentPosition(bank()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  // 拼錯、再試一次的時候都還在
+  await build(user, ['20', '×', '20']);
+  await user.click(button('檢查'));
+  expect(screen.getByText(HELP)).toBeInTheDocument();
+  await user.click(button('再試一次'));
+  expect(screen.getByText(HELP)).toBeInTheDocument();
+
+  // 算式拼對：磚塊鎖住、下方收起來，說明也收起來
+  await solveFormula(user);
+  expect(screen.queryByText(HELP)).not.toBeInTheDocument();
+});
+
+it('拼算式：再試一次把答案列清空（拼的是不完整的算式也一樣），焦點回到空的答案列', async () => {
+  const { user } = renderCard(bracketStep);
+  await build(user, ['(', '6', '+', '18', '÷', '2']);
+  await user.click(button('檢查'));
+  expect(screen.getByText(INCOMPLETE)).toBeInTheDocument();
+  await user.click(button('再試一次'));
+  expect(names(row())).toEqual([]);
+  expect(row()).toHaveFocus();
+  expect(within(bank()).getAllByRole('button').map((b) => b.textContent)).toEqual(bracketStep.tiles);
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+});
+
+it('拼算式：有標示的磚塊，標示用小字寫在數字下方，名稱是「放入 20（力）」「拿回 20（力）」；兩塊「20」分得出來', async () => {
+  const { user } = renderCard(labelledStep);
+  expect(names(bank())).toEqual(['放入 20（力）', '放入 乘', '放入 20（質量）', '放入 除以', '放入 10（空車質量）', '放入 減']);
+
+  // 標示是磚塊裡的小字（在數字下面），磚塊還是至少 44px
+  const force = button('放入 20（力）');
+  const caption = within(force).getByText('力');
+  expect(caption).toHaveClass('lp-tile-label');
+  expect(force.textContent).toBe('20力');
+  expect(within(button('放入 乘')).queryByText(/./, { selector: '.lp-tile-label' })).not.toBeInTheDocument();
+  for (const tile of within(bank()).getAllByRole('button')) expectTappable(tile);
+
+  // 放上去：答案列的名稱也帶標示；下方留下的空位也保留標示的大小（螢幕閱讀器略過）
+  await user.click(button('放入 20（質量）'));
+  expect(names(row())).toEqual(['拿回 20（質量）']);
+  const ghost = bank().querySelector('.lp-tile--ghost');
+  expect(ghost).toHaveAttribute('aria-hidden', 'true');
+  expect(ghost?.querySelector('.lp-tile-label')).toHaveTextContent('質量');
+  await user.click(button('放入 除以'));
+  await user.click(button('放入 20（力）'));
+  expect(names(row())).toEqual(['拿回 20（質量）', '拿回 除以', '拿回 20（力）']);
+
+  // 拿回來：回到它自己的位置
+  await user.click(button('拿回 20（質量）'));
+  expect(names(bank())).toEqual(['放入 乘', '放入 20（質量）', '放入 10（空車質量）', '放入 減']);
+  await user.click(button('拿回 除以'));
+  await user.click(button('拿回 20（力）'));
+
+  // 拼對之後算式鎖住：鎖住的磚塊名稱也帶標示
+  await build(user, ['20', '÷', '20']);
+  await user.click(button('檢查'));
+  expect(names(row())).toEqual(['20（力）', '除以', '20（質量）']);
+  expect(within(row()).getByText('力')).toHaveClass('lp-tile-label');
+});
+
+it('LessonPlayer：拼算式在第 1 步答錯 → 引導走完 → 再拼錯：主要按鈕「再試一次」會清空答案列；「再看一次引導」重新進入引導', async () => {
+  const lesson: Lesson = {
+    id: 'test-formula-guide-again',
+    title: '測試再看一次引導',
+    steps: [
+      {
+        ...labelledStep,
+        guide: [{ kind: 'concept', id: 'cart-guide', body: ['加速度 = 力 ÷ 質量。'] }],
+      },
+    ],
+  };
+  const onComplete = vi.fn();
+  const user = setupUser();
+  render(<LessonPlayer lesson={lesson} onComplete={onComplete} onExit={vi.fn()} />);
+
+  await build(user, ['20', '×', '20']);
+  await user.click(button('檢查'));
+  await user.click(button('一步一步來'));
+  await user.click(button('繼續'));
+
+  // 回到原題又拼錯
+  expect(names(row())).toEqual([]);
+  await build(user, ['20', '×', '20']);
+  await user.click(button('檢查'));
+  expect(button('再試一次')).toHaveFocus();
+  expect(button('再看一次引導')).toBeInTheDocument();
+  expect(button('看解答')).toBeInTheDocument();
+  expect(queryButton('一步一步來')).not.toBeInTheDocument();
+  await user.click(button('再試一次'));
+  expect(names(row())).toEqual([]);
+
+  // 再拼錯一次，改按「再看一次引導」：重新進入引導
+  await build(user, ['20', M, '20']);
+  await user.click(button('檢查'));
+  await user.click(button('再看一次引導'));
+  expect(screen.getByText('加速度 = 力 ÷ 質量。')).toBeInTheDocument();
+  await user.click(button('繼續'));
+
+  // 回到原題拼對、算對：這一題仍然不算一次答對
+  await user.type(await solveFormula(user), '1');
+  await user.click(button('檢查'));
+  await user.click(button('繼續'));
+  expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 10, perfect: false, accuracy: 0 }));
 });

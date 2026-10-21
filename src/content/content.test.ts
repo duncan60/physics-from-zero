@@ -76,8 +76,41 @@ function assertWrongAnswers(s: NumberStep | FormulaStep): void {
   }
 }
 
+/** 數字磚塊（不是 + − × ÷ ( )）。 */
+const NUMBER_TILE = /^[0-9]+(\.[0-9]+)?$/;
+
+/**
+ * 拼算式的方塊標示（tileLabels）有什麼問題，沒有問題時是空陣列：
+ * 長度要和 tiles 一樣；標示不能是空白；同一題裡數值相同的數字磚塊一定都要有標示，而且標示都不一樣（才分得出是哪一塊）；
+ * 標示不能直接寫出答案。
+ */
+function tileLabelProblems(s: Pick<FormulaStep, 'id' | 'tiles' | 'tileLabels' | 'answer'>): string[] {
+  const problems: string[] = [];
+  const labels = s.tileLabels;
+  if (labels !== undefined && labels.length !== s.tiles.length) {
+    problems.push(`${s.id}：tileLabels 有 ${labels.length} 個，tiles 有 ${s.tiles.length} 個`);
+  }
+  for (const [i, label] of (labels ?? []).entries()) {
+    if (label === undefined) continue;
+    if (label.trim() === '') problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示是空白`);
+    else if (mentionsNumber(label, s.answer)) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示「${label}」寫出了答案 ${s.answer}`);
+  }
+  const byValue = new Map<string, number[]>();
+  for (const [i, tile] of s.tiles.entries()) {
+    if (NUMBER_TILE.test(tile)) byValue.set(tile, [...(byValue.get(tile) ?? []), i]);
+  }
+  for (const [value, indexes] of byValue) {
+    if (indexes.length < 2) continue;
+    const named = indexes.map((i) => labels?.[i]?.trim() ?? '');
+    if (named.some((label) => label === '')) problems.push(`${s.id}：有 ${indexes.length} 塊「${value}」，每一塊都要有標示`);
+    else if (new Set(named).size !== named.length) problems.push(`${s.id}：${indexes.length} 塊「${value}」的標示要不一樣`);
+  }
+  return problems;
+}
+
 function assertFormula(s: FormulaStep): void {
   assertWrongAnswers(s);
+  expect(tileLabelProblems(s)).toEqual([]);
   for (const tile of s.tiles) expect(tile, `${s.id}：磚塊「${tile}」不是數字或 + − × ÷ ( )`).toMatch(TILE);
   expect(s.accepted.length, `${s.id}：沒有可接受的寫法`).toBeGreaterThan(0);
   for (const accepted of s.accepted) {
@@ -444,6 +477,73 @@ it('2-1 推空購物車的滑桿：0 到 40 N、間距 1、從 0 開始、答案
     answer: 20,
     anim: 'cart',
   });
+});
+
+// ---- 拼算式的方塊標示：數值相同的方塊一定分得出來 ----
+
+describe('tileLabelProblems（方塊標示的內容檢查）', () => {
+  const base = { id: 'demo', answer: 1 };
+  it('沒有重複的數字、沒有標示：沒問題', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'] })).toEqual([]);
+  });
+  it('符號重複不需要標示', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['(', '6', ')', '(', '2', ')'] })).toEqual([]);
+  });
+  it('兩塊「20」沒有標示、只標了一塊、標示一樣：都不行', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['20', '20', '÷'] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, tiles: ['20', '20', '÷'], tileLabels: ['力', undefined, undefined] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, tiles: ['20', '20', '÷'], tileLabels: ['力', '力', undefined] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, tiles: ['20', '20', '÷'], tileLabels: ['力', ' ', undefined] })).not.toEqual([]);
+  });
+  it('兩塊「20」標示不同：沒問題', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['20', '20', '÷'], tileLabels: ['力', '質量', undefined] })).toEqual([]);
+  });
+  it('tileLabels 的長度要和 tiles 一樣', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['力'] })).toHaveLength(1);
+  });
+  it('標示不能是空白，也不能寫出答案', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['', undefined, undefined] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, answer: 2, tiles: ['10', '20', '÷'], tileLabels: ['答案是 2', undefined, undefined] })).toHaveLength(1);
+  });
+});
+
+/** 某一題拼算式每一塊的標示（沒有標示的是 undefined），依 tiles 的順序，和數值配成一對。 */
+function labelledTiles(step: Step | undefined): [string, string | undefined][] {
+  if (step?.kind !== 'formula') throw new Error('不是拼算式');
+  return step.tiles.map((tile, i) => [tile, step.tileLabels?.[i]]);
+}
+
+it('2-1 full-cart-accel：兩塊「20」分別標示「力」和「滿車質量」，陷阱「10」標示「空車質量」', () => {
+  expect(labelledTiles(findStep('2-1', 'full-cart-accel'))).toEqual([
+    ['10', '空車質量'],
+    ['20', '力'],
+    ['20', '滿車質量'],
+    ['−', undefined],
+    ['×', undefined],
+    ['÷', undefined],
+  ]);
+});
+
+it('2-4 moon-weight：1 是質量、1.6 是月球 g、10 是地球 g', () => {
+  expect(labelledTiles(findStep('2-4', 'moon-weight'))).toEqual([
+    ['1', '質量'],
+    ['1.6', '月球 g'],
+    ['10', '地球 g'],
+    ['+', undefined],
+    ['×', undefined],
+    ['÷', undefined],
+  ]);
+});
+
+it('第 2 站複習 bus-brake-size：題目沒寫到的「10」標示「地球 g」，其他數字也標出是什麼', () => {
+  expect(labelledTiles(reviewOf(2)?.steps.find((s) => s.id === 'bus-brake-size'))).toEqual([
+    ['2', '加速度大小'],
+    ['10', '地球 g'],
+    ['6000', '質量'],
+    ['+', undefined],
+    ['×', undefined],
+    ['÷', undefined],
+  ]);
 });
 
 /** 每一課都要通過的內容檢查。每站的複習包裝成一課（reviewAsLesson）之後，也套用同一套。 */
