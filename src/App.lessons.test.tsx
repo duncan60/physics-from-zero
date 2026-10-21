@@ -5,6 +5,7 @@ import App from './App';
 import { tileName } from './components/steps/FormulaInput';
 import { isLastLessonOfStation, reviewAsLesson, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './content/stations';
 import { blankCells } from './lib/answer';
+import { formulaTiles } from './lib/formula';
 import { emptyStats, lessonXp, recordQuestion } from './lib/game';
 import { PERFECT_BONUS_XP, STORAGE_KEY, XP_PER_FIRST_TRY, XP_PER_LESSON, emptyProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
@@ -174,12 +175,13 @@ async function playStep(user: User, step: Step): Promise<void> {
       break;
     case 'formula': {
       const bank = screen.getByRole('group', { name: '磚塊' });
-      // 依數值找下方還沒用到的第一塊；有標示的磚塊，名稱是「放入 20（力）」
+      // 找下方還沒用到、寫法一樣的第一塊（有標示的磚塊在算式裡是「20|力」，按鈕名稱是「放入 20（力）」）
+      const tokens = formulaTiles(step);
       const used = new Set<number>();
       for (const token of step.accepted[0]) {
-        const tile = step.tiles.findIndex((value, i) => value === token && !used.has(i));
+        const tile = tokens.findIndex((t, i) => t === token && !used.has(i));
         used.add(tile);
-        await user.click(within(bank).getAllByRole('button', { name: `放入 ${tileName(token, step.tileLabels?.[tile])}` })[0]);
+        await user.click(within(bank).getAllByRole('button', { name: `放入 ${tileName(step.tiles[tile], step.tileLabels?.[tile])}` })[0]);
       }
       await user.click(button('檢查'));
       expect(screen.queryByText('還不對'), `${step.id}：算式沒有拼對`).not.toBeInTheDocument();

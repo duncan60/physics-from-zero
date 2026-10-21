@@ -4,6 +4,11 @@
 // 水平推只看質量，這只在沒有摩擦力時成立，所以題目都保留「沒有摩擦力」這個條件。
 import type { Lesson } from '../../lib/types';
 
+// moon-weight 有標示的磚塊：算式裡寫成「數值|標示」。
+const MASS = '1|質量';
+const MOON_G = '1.6|月球 g';
+const EARTH_G = '10|地球 g';
+
 const massAndWeight: Lesson = {
   id: '2-4',
   title: '質量和重量',
@@ -72,24 +77,24 @@ const massAndWeight: Lesson = {
       tiles: ['1', '1.6', '10', '+', '×', '÷'],
       // 10 沒有寫在題目裡，是觀念卡上地球的 g（陷阱），標出來才知道它是什麼。
       tileLabels: ['質量', '月球 g', '地球 g', undefined, undefined, undefined],
-      accepted: [['1', '×', '1.6']],
+      accepted: [[MASS, '×', MOON_G]],
       wrongForms: [
         {
-          tokens: ['1', '×', '10'],
+          tokens: [MASS, '×', EARTH_G],
           feedback: '你用了 W = m × g，這步對了。不過 10 是地球的 g，算出來的是鐵球在地球上的重量。這題在月球上：g 要換成多少？',
         },
         {
-          tokens: ['1.6', '÷', '1'],
+          tokens: [MOON_G, '÷', MASS],
           feedback: '算出來的數字碰巧對，因為質量是 1，除以 1 不會改變數字。不過 W = m × g，m 和 g 中間是什麼符號？換成 2 公斤的鐵球就會算錯。',
         },
-        { tokens: ['1', '÷', '1.6'], feedback: '質量和月球的 g 都用上了，這點沒錯。不過 W = m × g，m 和 g 中間是什麼符號？' },
-        { tokens: ['1', '+', '1.6'], feedback: '質量和月球的 g 都放進去了。不過重量不是把兩個加起來：W = m × g，中間是什麼符號？' },
+        { tokens: [MASS, '÷', MOON_G], feedback: '質量和月球的 g 都用上了，這點沒錯。不過 W = m × g，m 和 g 中間是什麼符號？' },
+        { tokens: [MASS, '+', MOON_G], feedback: '質量和月球的 g 都放進去了。不過重量不是把兩個加起來：W = m × g，中間是什麼符號？' },
         {
-          tokens: ['1.6', '×', '10'],
+          tokens: [MOON_G, '×', EARTH_G],
           feedback: '1.6 是月球的 g，這個你記對了。不過 W = m × g 只要一個 g，10 是地球的 g。另一個要放的，是鐵球的什麼？',
         },
         {
-          tokens: ['1.6'],
+          tokens: [MOON_G],
           feedback: '數字碰巧一樣，因為質量是 1。不過 1.6 是月球的 g，是加速度，不是重量：W = m × g，把鐵球的質量也拼進去。',
         },
       ],

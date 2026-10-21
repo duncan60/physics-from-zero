@@ -4,6 +4,11 @@
 // g：地球約 9.8，這裡取 10 公尺/秒²（和各課一樣），月球用約略值 1.6。水平推只看質量，只在沒有摩擦力時成立，所以題目都保留這個條件。
 import type { StationReview } from '../../lib/types';
 
+// bus-brake-size 有標示的磚塊：算式裡寫成「數值|標示」。
+const BUS_MASS = '6000|質量';
+const BRAKE_ACCEL = '2|加速度大小';
+const EARTH_G = '10|地球 g';
+
 const forceReview: StationReview = {
   stationId: 2,
   points: [
@@ -107,18 +112,18 @@ const forceReview: StationReview = {
       tiles: ['2', '10', '6000', '+', '×', '÷'],
       // 10 沒有寫在題目裡，是地球的 g（陷阱：算出來的是重量）；其他數字也一起標，不會只標陷阱。
       tileLabels: ['加速度大小', '地球 g', '質量', undefined, undefined, undefined],
-      accepted: [['6000', '×', '2']],
+      accepted: [[BUS_MASS, '×', BRAKE_ACCEL]],
       wrongForms: [
         {
-          tokens: ['6000', '÷', '2'],
+          tokens: [BUS_MASS, '÷', BRAKE_ACCEL],
           feedback: '公車的質量和每秒減少的 2 都用上了，這點沒錯。不過 F = m × a，m 和 a 中間是什麼符號？',
         },
         {
-          tokens: ['6000', '+', '2'],
+          tokens: [BUS_MASS, '+', BRAKE_ACCEL],
           feedback: '質量和加速度都放進去了。不過力不是把兩個加起來：F = m × a，中間是什麼符號？',
         },
         {
-          tokens: ['6000', '×', '10'],
+          tokens: [BUS_MASS, '×', EARTH_G],
           feedback: '你用了乘法，這步對了。不過 10 是地球的 g，6000 × 10 算出來的是公車的重量，是地球往下拉它的力。讓公車往前的速度變小的力，F = m × a 的 a 要放什麼？',
         },
       ],

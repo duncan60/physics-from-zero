@@ -3,6 +3,13 @@
 // 重力加速度和第 1 站一樣用 10 公尺/秒²，往上為正。
 import type { Lesson } from '../../lib/types';
 
+// full-cart-accel 有標示的磚塊：算式裡寫成「數值|標示」，照用途判斷（力 ÷ 滿車質量才對，反過來數值碰巧一樣也不算）。
+const FORCE = '20|力';
+const FULL_MASS = '20|滿車質量';
+const EMPTY_MASS = '10|空車質量';
+const BOTH_TWENTIES_SUBTRACTED =
+  '力和質量兩個 20 都用上了，這點沒錯。不過 20 − 20 = 0，等於說推了速度也不會變。一直有 20 N 在推，滿車真的不會越來越快嗎？';
+
 const forceAndAcceleration: Lesson = {
   id: '2-1',
   title: '力與加速度',
@@ -110,17 +117,21 @@ const forceAndAcceleration: Lesson = {
       tiles: ['10', '20', '20', '−', '×', '÷'],
       // 兩塊 20 一個是力、一個是滿車的質量；10 是前一題空車的質量（陷阱）。
       tileLabels: ['空車質量', '力', '滿車質量', undefined, undefined, undefined],
-      accepted: [['20', '÷', '20']],
+      accepted: [[FORCE, '÷', FULL_MASS]],
       wrongForms: [
         {
-          tokens: ['20', '×', '20'],
-          feedback: '你想到用 F = m × a，方向對了。不過 20 × 20 是把力和質量乘在一起，算出來的不是加速度。這題已經知道力和質量，要找的是加速度：先把 20 N 和 20 公斤放進式子裡對應的位置。',
+          tokens: [FULL_MASS, '÷', FORCE],
+          feedback:
+            '力和滿車質量都用上了，也想到要用除的，很好。不過順序反了：加速度 = 力 ÷ 質量（a = F ÷ m），是用力去除以質量。這題兩個都是 20，算出來碰巧一樣，換一台車就不一樣了。',
         },
         {
-          tokens: ['20', '−', '20'],
-          feedback: '力和質量兩個 20 都用上了，這點沒錯。不過 20 − 20 = 0，等於說推了速度也不會變。一直有 20 N 在推，滿車真的不會越來越快嗎？',
+          tokens: [FORCE, '×', FULL_MASS],
+          feedback: '你想到用 F = m × a，方向對了。不過 20 × 20 是把力和質量乘在一起，算出來的不是加速度。這題已經知道力和質量，要找的是加速度：先把 20 N 和 20 公斤放進式子裡對應的位置。',
         },
-        { tokens: ['20', '÷', '10'], feedback: '用力除以質量，這個想法很好。不過 10 公斤是空車的質量，這題推的是滿車：滿車是幾公斤？' },
+        // − 兩邊不能對調，兩種順序都要認得
+        { tokens: [FORCE, '−', FULL_MASS], feedback: BOTH_TWENTIES_SUBTRACTED },
+        { tokens: [FULL_MASS, '−', FORCE], feedback: BOTH_TWENTIES_SUBTRACTED },
+        { tokens: [FORCE, '÷', EMPTY_MASS], feedback: '用力除以質量，這個想法很好。不過 10 公斤是空車的質量，這題推的是滿車：滿車是幾公斤？' },
       ],
       answer: 1,
       unit: '公尺/秒²',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCells } from '../lib/answer';
-import { acceptedNote, checkFormula, evaluateFormula, parseFormula, sameFormula } from '../lib/formula';
+import { acceptedNote, checkFormula, evaluateFormula, formulaTiles, parseFormula, sameFormula } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
 import type { ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
@@ -81,8 +81,8 @@ const NUMBER_TILE = /^[0-9]+(\.[0-9]+)?$/;
 
 /**
  * 拼算式的方塊標示（tileLabels）有什麼問題，沒有問題時是空陣列：
- * 長度要和 tiles 一樣；標示不能是空白；同一題裡數值相同的數字磚塊一定都要有標示，而且標示都不一樣（才分得出是哪一塊）；
- * 標示不能直接寫出答案。
+ * 長度要和 tiles 一樣；標示不能是空白；只有數字磚塊可以有標示；標示裡不能有「|」（算式裡寫成「數值|標示」）；
+ * 同一題裡數值相同的數字磚塊一定都要有標示，而且標示都不一樣（才分得出是哪一塊）；標示不能直接寫出答案。
  */
 function tileLabelProblems(s: Pick<FormulaStep, 'id' | 'tiles' | 'tileLabels' | 'answer'>): string[] {
   const problems: string[] = [];
@@ -93,6 +93,8 @@ function tileLabelProblems(s: Pick<FormulaStep, 'id' | 'tiles' | 'tileLabels' | 
   for (const [i, label] of (labels ?? []).entries()) {
     if (label === undefined) continue;
     if (label.trim() === '') problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示是空白`);
+    else if (!NUMBER_TILE.test(s.tiles[i] ?? '')) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」不是數字，不能有標示`);
+    else if (label.includes('|')) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示「${label}」不能有「|」（算式裡用它隔開數值和標示）`);
     else if (mentionsNumber(label, s.answer)) problems.push(`${s.id}：第 ${i + 1} 塊「${s.tiles[i]}」的標示「${label}」寫出了答案 ${s.answer}`);
   }
   const byValue = new Map<string, number[]>();
@@ -115,7 +117,8 @@ function assertFormula(s: FormulaStep): void {
   expect(s.accepted.length, `${s.id}：沒有可接受的寫法`).toBeGreaterThan(0);
   for (const accepted of s.accepted) {
     const shown = accepted.join(' ');
-    expect(missingTiles(accepted, s.tiles), `${s.id}：「${shown}」用到題目沒給的磚塊`).toEqual([]);
+    // 有標示的磚塊要寫成「數值|標示」（formulaTiles）：寫成只有數值、或標示寫錯，都拼不出來
+    expect(missingTiles(accepted, formulaTiles(s)), `${s.id}：「${shown}」用到題目沒給的磚塊`).toEqual([]);
     const value = evaluateFormula(accepted);
     expect(value, `${s.id}：「${shown}」不是合法的算式`).not.toBeNull();
     const matches = value !== null && Math.abs(value - s.answer) <= (s.tolerance ?? 0) + EPSILON;
@@ -132,6 +135,7 @@ function assertFormula(s: FormulaStep): void {
   for (const [i, { tokens: noteTokens, note }] of notes.entries()) {
     const shown = noteTokens.join(' ');
     expect(parseFormula(noteTokens), `${s.id}：提醒的算式「${shown}」不合法`).not.toBeNull();
+    expect(missingTiles(noteTokens, formulaTiles(s)), `${s.id}：提醒的算式「${shown}」用到題目沒給的磚塊`).toEqual([]);
     expect(
       s.accepted.some((accepted) => sameFormula(noteTokens, accepted)),
       `${s.id}：提醒的算式「${shown}」不是 accepted 裡的任何一種寫法，提醒永遠不會出現`,
@@ -148,7 +152,7 @@ function assertFormula(s: FormulaStep): void {
     const shown = wrong.tokens.join(' ');
     // 不合法的拼法永遠配不到，那則回饋就不會出現；用到題目沒給的磚塊，學習者也拼不出來。
     expect(parseFormula(wrong.tokens), `${s.id}：已知錯誤算式「${shown}」不合法，永遠配不到`).not.toBeNull();
-    expect(missingTiles(wrong.tokens, s.tiles), `${s.id}：已知錯誤算式「${shown}」用到題目沒給的磚塊`).toEqual([]);
+    expect(missingTiles(wrong.tokens, formulaTiles(s)), `${s.id}：已知錯誤算式「${shown}」用到題目沒給的磚塊`).toEqual([]);
     expect(wrong.feedback.trim(), `${s.id}：「${shown}」的回饋是空的`).not.toBe('');
     for (const accepted of s.accepted) {
       expect(sameFormula(wrong.tokens, accepted), `${s.id}：已知錯誤算式「${shown}」和可接受的「${accepted.join(' ')}」是同一個算式`).toBe(false);
@@ -319,7 +323,7 @@ it.each([
   ['1-3', 'scooter-6-to-18', '( 18 − 6 ) ÷ 4', ['( 6 + 18 ) ÷ 4']],
   ['1-5', 'scooter-average', '( 6 + 18 ) ÷ 2', ['( 6 + 18 ) ÷ 3', '( 18 − 6 ) ÷ 2']],
   ['1-5', 'bus-slide', '( 10 + 0 ) ÷ 2 × 5', ['( 10 − 0 ) ÷ 2 × 5', '10 × 5']],
-  ['2-1', 'full-cart-accel', '20 ÷ 20', ['20 × 20']],
+  ['2-1', 'full-cart-accel', '20|力 ÷ 20|滿車質量', ['20|力 × 20|滿車質量']], // 有標示的磚塊寫成「數值|標示」
 ] as const)('%s 的 %s：正確算式是 %s，認得真的寫錯過的算式', (lessonId, stepId, correct, wrongs) => {
   const step = findStep(lessonId, stepId);
   if (step?.kind !== 'formula') throw new Error(`${stepId} 不是拼算式`);
@@ -446,11 +450,39 @@ it('1-5 scooter-average 的引導：題目和說明寫的是同一個順序 (6 +
 it('2-4 月球上的重量拼成 1 × 1.6；碰巧算對的 1.6 ÷ 1、1.6 仍然是錯的，而且有回饋', () => {
   const step = findStep('2-4', 'moon-weight');
   if (step?.kind !== 'formula') throw new Error('moon-weight 不是拼算式');
-  expect(sameFormula(step.accepted[0], tokens('1 × 1.6'))).toBe(true);
-  expect(checkFormula(step, tokens('1.6 × 1'))).toEqual({ correct: true });
-  for (const formula of ['1.6 ÷ 1', '1.6', '1 × 10']) {
-    expect(checkFormula(step, tokens(formula)), formula).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
+  // 有標示的磚塊在算式裡寫成「數值|標示」
+  const mass = '1|質量';
+  const moon = '1.6|月球 g';
+  const earth = '10|地球 g';
+  expect(sameFormula(step.accepted[0], [mass, '×', moon])).toBe(true);
+  expect(checkFormula(step, [moon, '×', mass])).toEqual({ correct: true });
+  for (const formula of [[moon, '÷', mass], [moon], [mass, '×', earth]]) {
+    expect(checkFormula(step, formula), formula.join(' ')).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
   }
+});
+
+// 有標示之後照用途判斷：兩塊 20 一塊是力、一塊是滿車質量。質量 ÷ 力算出來碰巧也是 1，但順序反了。
+it('2-1 full-cart-accel：力 ÷ 滿車質量算對；滿車質量 ÷ 力是錯的，回饋說明順序是力 ÷ 質量（a = F ÷ m）', () => {
+  const step = findStep('2-1', 'full-cart-accel');
+  if (step?.kind !== 'formula') throw new Error('full-cart-accel 不是拼算式');
+  expect(checkFormula(step, ['20|力', '÷', '20|滿車質量'])).toEqual({ correct: true });
+  const reversed = checkFormula(step, ['20|滿車質量', '÷', '20|力']);
+  expect(reversed.correct).toBe(false);
+  const feedback = reversed.correct ? '' : (reversed.feedback ?? '');
+  expect(feedback).toContain('力 ÷ 質量');
+  expect(feedback).toContain('a = F ÷ m');
+  // − 兩邊不能對調，所以兩種順序都要認得；× 可以對調
+  for (const formula of [['20|力', '−', '20|滿車質量'], ['20|滿車質量', '−', '20|力'], ['20|滿車質量', '×', '20|力']]) {
+    expect(checkFormula(step, formula), formula.join(' ')).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
+  }
+});
+
+it('第 2 站複習 bus-brake-size：質量 × 加速度大小算對（× 可以對調）；用了地球 g 是錯的，有回饋', () => {
+  const step = reviewOf(2)?.steps.find((s) => s.id === 'bus-brake-size');
+  if (step?.kind !== 'formula') throw new Error('bus-brake-size 不是拼算式');
+  expect(checkFormula(step, ['6000|質量', '×', '2|加速度大小'])).toEqual({ correct: true });
+  expect(checkFormula(step, ['2|加速度大小', '×', '6000|質量'])).toEqual({ correct: true });
+  expect(checkFormula(step, ['6000|質量', '×', '10|地球 g'])).toMatchObject({ correct: false, feedback: expect.stringContaining('地球的 g') });
 });
 
 it('1-5 最後一步是公式配對，三對照 spec', () => {
@@ -500,6 +532,10 @@ describe('tileLabelProblems（方塊標示的內容檢查）', () => {
   });
   it('tileLabels 的長度要和 tiles 一樣', () => {
     expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['力'] })).toHaveLength(1);
+  });
+  it('只有數字磚塊可以有標示，標示裡不能有「|」', () => {
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: [undefined, undefined, '先算'] })).toHaveLength(1);
+    expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['力|質量', undefined, undefined] })).toHaveLength(1);
   });
   it('標示不能是空白，也不能寫出答案', () => {
     expect(tileLabelProblems({ ...base, tiles: ['10', '20', '÷'], tileLabels: ['', undefined, undefined] })).toHaveLength(1);

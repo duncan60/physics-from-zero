@@ -1106,11 +1106,20 @@ it('tileName：有標示時接在念出來的名稱後面，用全形括號；�
   expect(tileName('(', '先算')).toBe('左括號（先算）');
 });
 
-/** 和 formulaStep 一樣，但兩塊「20」分別標示「力」「質量」，陷阱「10」標示「空車質量」。 */
+/**
+ * 和 formulaStep 一樣，但兩塊「20」分別標示「力」「質量」，陷阱「10」標示「空車質量」。
+ * 有標示的磚塊在算式裡寫成「數值|標示」，照用途判斷：力 ÷ 質量才對，質量 ÷ 力不對。
+ */
+const ORDER_FEEDBACK = '順序反了：加速度 = 力 ÷ 質量（a = F ÷ m）。';
 const labelledStep: FormulaStep = {
   ...formulaStep,
   id: 'cart-accel-labelled',
   tileLabels: ['力', undefined, '質量', undefined, '空車質量', undefined],
+  accepted: [['20|力', '÷', '20|質量']],
+  wrongForms: [
+    { tokens: ['20|力', '×', '20|質量'], feedback: '力除以質量，不是乘。' },
+    { tokens: ['20|質量', '÷', '20|力'], feedback: ORDER_FEEDBACK },
+  ],
 };
 
 it('拼算式：磚塊上方一直有一行操作說明；算式拼對、磚塊收起來之後就不需要了', async () => {
@@ -1223,4 +1232,61 @@ it('LessonPlayer：拼算式在第 1 步答錯 → 引導走完 → 再拼錯：
   await user.click(button('檢查'));
   await user.click(button('繼續'));
   expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ xp: 10, perfect: false, accuracy: 0 }));
+});
+
+it('拼算式（有標示）：質量 ÷ 力 數值碰巧一樣也是錯的，給「順序反了」的回饋；力 ÷ 質量才進到第 2 步', async () => {
+  const onCheck = vi.fn();
+  const user = setupUser();
+  render(<QuestionCard step={labelledStep} onFinish={vi.fn()} onCheck={onCheck} />);
+
+  await user.click(button('放入 20（質量）'));
+  await user.click(button('放入 除以'));
+  await user.click(button('放入 20（力）'));
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText(ORDER_FEEDBACK)).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: '第 2 步：算出答案' })).not.toBeInTheDocument();
+  expect(onCheck.mock.calls).toEqual([['wrong']]);
+
+  await user.click(button('再試一次'));
+  await user.click(button('放入 20（力）'));
+  await user.click(button('放入 除以'));
+  await user.click(button('放入 20（質量）'));
+  await user.click(button('檢查'));
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
+  expect(names(row())).toEqual(['20（力）', '除以', '20（質量）']);
+  expect(onCheck.mock.calls).toEqual([['wrong'], ['partial']]);
+});
+
+it('拼算式（有標示）：× 兩邊對調還是同一個算式，一樣認得那則回饋', async () => {
+  const user = setupUser();
+  render(<QuestionCard step={labelledStep} onFinish={vi.fn()} />);
+  await user.click(button('放入 20（質量）'));
+  await user.click(button('放入 乘'));
+  await user.click(button('放入 20（力）'));
+  await user.click(button('檢查'));
+  expect(screen.getByText('力除以質量，不是乘。')).toBeInTheDocument();
+});
+
+it('拼算式（沒有標示）照舊：兩塊 20 分不出來，先放第二塊或第一塊都算對', async () => {
+  const user = setupUser();
+  render(<QuestionCard step={formulaStep} onFinish={vi.fn()} />);
+  await user.click(within(bank()).getAllByRole('button', { name: '放入 20' })[1]);
+  await user.click(button('放入 除以'));
+  await user.click(button('放入 20'));
+  await user.click(button('檢查'));
+  expect(screen.queryByText('還不對')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '第 2 步：算出答案' })).toBeInTheDocument();
+});
+
+it('拼算式（有標示）看解答：正確算式寫出每一塊的標示，螢幕閱讀器念的是磚塊的名稱', async () => {
+  const user = setupUser();
+  render(<QuestionCard step={labelledStep} onFinish={vi.fn()} />);
+  await build(user, ['20', '×', '20']);
+  await user.click(button('檢查'));
+  await user.click(button('看解答'));
+  expect(screen.getByText('20（力） ÷ 20（質量）')).toHaveAttribute('aria-hidden', 'true');
+  expect(screen.getByText('20（力） 除以 20（質量）')).toHaveClass('lp-sr-only');
+  expect(screen.getByText('1 公尺/秒²')).toBeInTheDocument();
 });

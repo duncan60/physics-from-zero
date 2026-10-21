@@ -8,6 +8,42 @@ export type FormulaNode =
 
 const NUMBER = /^[0-9]+(\.[0-9]+)?$/;
 
+/**
+ * 有標示的磚塊（FormulaStep.tileLabels）在算式裡寫成「數值|標示」，例如兩塊 20 是 '20|力' 和 '20|滿車質量'。
+ * 算值的時候當作那個數字；比對算式的時候連標示一起比，所以判斷的是「用了哪一塊」，不只是數值：
+ * 20|滿車質量 ÷ 20|力 算出來碰巧也是 1，但和 20|力 ÷ 20|滿車質量 不是同一個算式。沒有標示的磚塊照舊只寫數值。
+ */
+const LABEL_SEPARATOR = '|';
+
+/** 標示有沒有內容（undefined 和空白都當作沒有標示）。 */
+export function hasTileLabel(label: string | undefined): label is string {
+  return label !== undefined && label.trim() !== '';
+}
+
+/** 一塊磚在算式裡的寫法：有標示是「數值|標示」，沒有就是數值（或符號）本身。 */
+export function tileToken(value: string, label: string | undefined): string {
+  return hasTileLabel(label) ? `${value}${LABEL_SEPARATOR}${label}` : value;
+}
+
+/** tileToken 的反向：拆回數值和標示，沒有標示時 label 是 undefined。 */
+export function splitTileToken(token: string): { value: string; label: string | undefined } {
+  const at = token.indexOf(LABEL_SEPARATOR);
+  return at === -1 ? { value: token, label: undefined } : { value: token.slice(0, at), label: token.slice(at + 1) };
+}
+
+/** 題目每一塊磚在算式裡的寫法，依 tiles 的順序（答案列上放的是 tiles 的索引，用這個換成算式）。 */
+export function formulaTiles(step: Pick<FormulaStep, 'tiles' | 'tileLabels'>): string[] {
+  return step.tiles.map((value, i) => tileToken(value, step.tileLabels?.[i]));
+}
+
+/** 數字磚塊（可以帶標示）的數值；不是數字磚塊時回傳 null。 */
+function numberValue(token: string): number | null {
+  const { value, label } = splitTileToken(token);
+  if (!NUMBER.test(value)) return null;
+  if (label !== undefined && (label.trim() === '' || label.includes(LABEL_SEPARATOR))) return null;
+  return Number(value);
+}
+
 function isAdditive(token: string | undefined): token is '+' | '−' {
   return token === '+' || token === '−';
 }
@@ -22,7 +58,7 @@ function isMultiplicative(token: string | undefined): token is '×' | '÷' {
  *   term       := factor (('×' | '÷') factor)*
  *   factor     := 數字 | '(' expression ')'
  * 空的、算符開頭或結尾、兩個算符或兩個數字連在一起、括號沒配好，都回傳 null（不拋出）。
- * 只認磚塊上的符號：半形的 '-'、'*'、'/' 和負數都不合法。
+ * 只認磚塊上的符號：半形的 '-'、'*'、'/' 和負數都不合法。數字可以帶標示（「20|力」，見 tileToken），符號不行。
  */
 export function parseFormula(tokens: string[]): FormulaNode | null {
   let pos = 0;
@@ -37,9 +73,10 @@ export function parseFormula(tokens: string[]): FormulaNode | null {
       pos += 1;
       return inner;
     }
-    if (!NUMBER.test(token)) return null;
+    const value = numberValue(token);
+    if (value === null) return null;
     pos += 1;
-    return { type: 'num', text: token, value: Number(token) };
+    return { type: 'num', text: token, value }; // text 保留標示：比對算式時分得出是哪一塊
   }
 
   function term(): FormulaNode | null {
@@ -121,6 +158,7 @@ function formulaKey(tokens: string[]): string | null {
 /**
  * 兩個磚塊序列是不是「同一個算式」：運算樹相同，`+` 與 `×` 可以交換、結合，`−` 與 `÷` 不行。
  * 只是算出來的數字一樣不算：(10 − 0) ÷ 2 和 (10 + 0) ÷ 2 的值相同，但不是同一個算式。
+ * 有標示的數字連標示一起比：20|力 和 20|質量 是不同的運算元。
  * 任何一邊不合法都是 false。
  */
 export function sameFormula(a: string[], b: string[]): boolean {

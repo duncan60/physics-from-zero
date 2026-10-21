@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { blankCells, checkChoice, checkNumber, checkTable, hasUnitAfterNumber, parseNumberInput } from '../lib/answer';
 import type { CheckResult } from '../lib/answer';
-import { acceptedNote, checkFormula, parseFormula } from '../lib/formula';
+import { acceptedNote, checkFormula, formulaTiles, parseFormula } from '../lib/formula';
 import { checkSlider } from '../lib/slider';
-import type { CheckOutcome, QuestionStep } from '../lib/types';
+import type { CheckOutcome, FormulaStep, QuestionStep } from '../lib/types';
 import { CartAnim } from './sims/CartAnim';
 import { ChoiceInput } from './steps/ChoiceInput';
-import { FormulaInput, spokenFormula } from './steps/FormulaInput';
+import { FormulaInput, shownFormula, spokenFormula } from './steps/FormulaInput';
 import { NumberInput, formatNumber } from './steps/NumberInput';
 import { SliderInput } from './steps/SliderInput';
 import { TableInput } from './steps/TableInput';
@@ -41,6 +41,12 @@ function retryHint(step: QuestionStep, formulaDone: boolean, canGuide: boolean):
   return null;
 }
 
+/** 答案列上的磚塊（tiles 的索引）換成算式：有標示的磚塊是「數值|標示」，照用途判斷，不只看數值。 */
+function placedTokens(step: FormulaStep, placed: number[]): string[] {
+  const tokens = formulaTiles(step);
+  return placed.map((tile) => tokens[tile]);
+}
+
 function withUnit(value: number, unit: string | undefined): string {
   return unit === undefined ? formatNumber(value) : `${formatNumber(value)} ${unit}`;
 }
@@ -53,8 +59,8 @@ interface SolutionLine {
 
 /**
  * 看解答時，「正確答案」下面的幾行。表格題的答案直接填進格子裡，所以沒有；
- * 拼算式同時顯示正確算式（第一個可接受的寫法，磚塊用空白隔開）和答案。
- * 算式裡的括號和符號，螢幕閱讀器念的是和磚塊一樣的名稱（「左括號」「除以」）。
+ * 拼算式同時顯示正確算式（第一個可接受的寫法，磚塊用空白隔開；有標示的磚塊寫成「20（力）」）和答案。
+ * 算式裡的括號和符號，螢幕閱讀器念的是和磚塊一樣的名稱（「左括號」「除以」「20（力）」）。
  */
 function solutionLines(step: QuestionStep): SolutionLine[] {
   switch (step.kind) {
@@ -67,7 +73,7 @@ function solutionLines(step: QuestionStep): SolutionLine[] {
     case 'table':
       return [];
     case 'formula': {
-      const formula = step.accepted.length > 0 ? [{ text: step.accepted[0].join(' '), spoken: spokenFormula(step.accepted[0]) }] : [];
+      const formula = step.accepted.length > 0 ? [{ text: shownFormula(step.accepted[0]), spoken: spokenFormula(step.accepted[0]) }] : [];
       return [...formula, { text: withUnit(step.answer, step.unit) }];
     }
     case 'slider':
@@ -126,7 +132,7 @@ export function QuestionCard(props: {
   const answering = phase === 'answering';
   // 拼算式：算式算對、但寫法省略了什麼（例如省略 + 0）時，在算式下面輕輕提醒正式寫法。
   // 從引導回來、算式已經放在答案列上時也看得到。只是多一句話，不改變對錯、也不影響「第一次就答對」。
-  const formulaNote = step.kind === 'formula' && formulaDone ? acceptedNote(step, placed.map((tile) => step.tiles[tile])) : null;
+  const formulaNote = step.kind === 'formula' && formulaDone ? acceptedNote(step, placedTokens(step, placed)) : null;
   const requestGuide = step.guide !== undefined && step.guide.length > 0 ? onRequestGuide : undefined;
   // 引導還沒走完過：答錯時主要按鈕是「一步一步來」。走完過了：主要按鈕是「再試一次」，引導改成次要按鈕「再看一次引導」。
   const guideFirst = guideCompleted ? undefined : requestGuide;
@@ -172,7 +178,7 @@ export function QuestionCard(props: {
         if (formulaDone) return checkNumber(step, numberRaw, { allowFraction: false }); // 要自己算出答案，不接受「18/6」
         // 什麼都沒放才是「請先拼出算式」；拼錯、亂拼都算答錯，亂拼的另外說明是哪裡沒拼完。
         if (placed.length === 0) return 'invalid';
-        const tokens = placed.map((tile) => step.tiles[tile]);
+        const tokens = placedTokens(step, placed);
         if (parseFormula(tokens) === null) return { correct: false, feedback: INCOMPLETE_FORMULA };
         return checkFormula(step, tokens);
       }

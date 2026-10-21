@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { hasTileLabel, splitTileToken } from '../../lib/formula';
 
 // 磚塊的大小寫在這裡（不放在 CSS），保證至少 44px 好按；空位用同樣的大小。
 const TILE_STYLE = { minHeight: 48, minWidth: 48 };
@@ -24,11 +25,7 @@ export function spokenTile(value: string): string {
  * 例如「20（力）」；沒有標示就是 spokenTile，例如「除以」。
  */
 export function tileName(value: string, label: string | undefined): string {
-  return hasLabel(label) ? `${spokenTile(value)}（${label}）` : spokenTile(value);
-}
-
-function hasLabel(label: string | undefined): label is string {
-  return label !== undefined && label.trim() !== '';
+  return hasTileLabel(label) ? `${spokenTile(value)}（${label}）` : spokenTile(value);
 }
 
 /** 磚塊上的字：數字或符號，有標示時在下面加一行小字。空位用同一個內容（看不見），大小才會一樣。 */
@@ -37,7 +34,7 @@ function TileFace(props: { value: string; label: string | undefined }): React.JS
   return (
     <>
       {value}
-      {hasLabel(label) && <span className="lp-tile-label">{label}</span>}
+      {hasTileLabel(label) && <span className="lp-tile-label">{label}</span>}
     </>
   );
 }
@@ -45,9 +42,27 @@ function TileFace(props: { value: string; label: string | undefined }): React.JS
 /** 磚塊上方固定的一行操作說明。 */
 export const FORMULA_HELP = '點方塊放進算式，點算式裡的方塊可以拿回來';
 
-/** 一串磚塊念出來的樣子，用空白隔開，例如「左括號 6 加 18 右括號 除以 2」。 */
+/**
+ * 一串磚塊念出來的樣子，用空白隔開，例如「左括號 6 加 18 右括號 除以 2」。
+ * 有標示的磚塊（算式裡的「20|力」）念成和按鈕一樣的「20（力）」。
+ */
 export function spokenFormula(tokens: string[]): string {
-  return tokens.map(spokenTile).join(' ');
+  return tokens
+    .map((token) => {
+      const { value, label } = splitTileToken(token);
+      return tileName(value, label);
+    })
+    .join(' ');
+}
+
+/** 一串磚塊在畫面上的樣子，用空白隔開，例如「( 6 + 18 ) ÷ 2」；有標示的磚塊寫成「20（力）」。 */
+export function shownFormula(tokens: string[]): string {
+  return tokens
+    .map((token) => {
+      const { value, label } = splitTileToken(token);
+      return hasTileLabel(label) ? `${value}（${label}）` : value;
+    })
+    .join(' ');
 }
 
 /** 放上去或拿回來之後，焦點要移去的地方（按下去的那顆按鈕已經不在原處了）。 */
