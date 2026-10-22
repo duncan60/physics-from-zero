@@ -114,7 +114,8 @@ it('刻度的數字和點用同一把尺：「2」和 2 秒的點左右對齊，
     expect(two).toBeDefined();
     expect(ten).toBeDefined();
     expect(Number(two?.getAttribute('x'))).toBe(cx);
-    const offset = Number(ten?.getAttribute('y')) - cy;
+    // 兩個座標都是比例尺算出來的小數，相減會有浮點誤差；取到小數第 2 位再比，看的是畫面上的位置。
+    const offset = Math.round((Number(ten?.getAttribute('y')) - cy) * 100) / 100;
     unmount();
     return offset;
   });

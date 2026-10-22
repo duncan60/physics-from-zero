@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankCells } from '../lib/answer';
-import { acceptedNote, checkFormula, evaluateFormula, formulaTiles, parseFormula, sameFormula } from '../lib/formula';
+import { acceptedNote, checkFormula, evaluateFormula, formulaTiles, parseFormula, sameFormula, splitTileToken } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
 import type { ChoiceStep, ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview, VtGraph } from '../lib/types';
@@ -245,8 +245,8 @@ it('第 1 站至少有 1-1～1-6，依序排在最前面', () => {
   expect(stations[0].lessons.map((l) => l.id).slice(0, 6)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5', '1-6']);
 });
 
-it('第 2 站至少有 2-1～2-4，依序排在最前面', () => {
-  expect(stations[1].lessons.map((l) => l.id).slice(0, 4)).toEqual(['2-1', '2-2', '2-3', '2-4']);
+it('第 2 站至少有 2-1～2-7，依序排在最前面', () => {
+  expect(stations[1].lessons.map((l) => l.id).slice(0, 7)).toEqual(['2-1', '2-2', '2-3', '2-4', '2-5', '2-6', '2-7']);
 });
 
 it('每一站的課程 id 都是「站號-課號」，課號從 1 開始連續；沒有課程的站就是空的（地圖上顯示即將推出）', () => {
@@ -259,8 +259,16 @@ it('第 1 站的課程標題（前 6 課）', () => {
   expect(stations[0].lessons.slice(0, 6).map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高', '速度–時間圖']);
 });
 
-it('第 2 站的課程標題（前 4 課）', () => {
-  expect(stations[1].lessons.slice(0, 4).map((l) => l.title)).toEqual(['力與加速度', '東西為什麼會停下來', '作用力與反作用力', '質量和重量']);
+it('第 2 站的課程標題（前 7 課）', () => {
+  expect(stations[1].lessons.slice(0, 7).map((l) => l.title)).toEqual([
+    '力與加速度',
+    '東西為什麼會停下來',
+    '作用力與反作用力',
+    '質量和重量',
+    '落下的東西',
+    '合力與單位',
+    '平衡與正向力',
+  ]);
 });
 
 it('orderedLessonIds 與各站課程一致', () => expect(orderedLessonIds).toEqual(lessons.map((l) => l.id)));
@@ -397,12 +405,18 @@ it('1-motion 複習的 pitch-height：省略 + 0 的寫法算對，有提醒，�
 });
 
 // accepted 裡寫出 0 的寫法是完整的寫法，不需要提醒；省略 0 的寫法一個都不能漏掉提醒。
-it('1-3 scooter-from-rest、1-5 bus-slide、1-motion pitch-height：省略 0 的寫法一個都沒漏掉提醒', () => {
-  const steps = [findStep('1-3', 'scooter-from-rest'), findStep('1-5', 'bus-slide'), reviewOf(1)?.steps.find((s) => s.id === 'pitch-height')];
+// 有標示的 0 寫成「0|一開始速度」，所以看的是「|」前面的數值。
+it('1-3 scooter-from-rest、1-5 bus-slide、1-motion pitch-height、2-5 two-second-distance：省略 0 的寫法一個都沒漏掉提醒', () => {
+  const steps = [
+    findStep('1-3', 'scooter-from-rest'),
+    findStep('1-5', 'bus-slide'),
+    reviewOf(1)?.steps.find((s) => s.id === 'pitch-height'),
+    findStep('2-5', 'two-second-distance'),
+  ];
   for (const step of steps) {
     if (step?.kind !== 'formula') throw new Error('不是拼算式');
     for (const accepted of step.accepted) {
-      const dropsZero = !accepted.includes('0');
+      const dropsZero = !accepted.some((token) => splitTileToken(token).value === '0');
       expect(acceptedNote(step, accepted) !== null, `${step.id}：「${accepted.join(' ')}」${dropsZero ? '省略了 0，要有提醒' : '是完整的寫法，不該有提醒'}`).toBe(dropsZero);
     }
   }
@@ -711,6 +725,9 @@ it('2-6 opposite-accel：(30 − 20) ÷ 5 算對；只用一個人的力、反�
   ]) {
     expect(checkFormula(step, formula), formula.join(' ')).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
   }
+  // 30 ÷ (20 − 5) 算出來也是 2：回饋要說數字是碰巧一樣
+  const lucky = checkFormula(step, [right, '÷', '(', left, '−', mass, ')']);
+  expect(lucky.correct ? '' : (lucky.feedback ?? '')).toContain('碰巧');
 });
 
 it('2-6 的購物車題都說明沒有摩擦力；單位配對是距離、速度、加速度、力、質量五對', () => {
@@ -1081,6 +1098,11 @@ describe('選擇題位置與長度的檢查', () => {
 
 // ---- 速度–時間圖：觀念卡、選擇題、數字題、表格題可以帶一張（graph），引導裡的也一樣 ----
 
+const VT_MAX_SECONDS = 10;
+const VT_MAX_SPEED_CELLS = 11;
+const VT_MAX_LINES = 3;
+const VT_MAX_LABEL = 6;
+
 /**
  * 一張速度–時間圖有什麼問題，沒有問題時是空陣列：
  * tMax、vMax、vStep 都要大於 0；時間軸固定每 1 秒一格，所以 tMax 是整數、最多 VT_MAX_SECONDS 秒（兩位數的數字才不會擠在一起）；
@@ -1089,11 +1111,6 @@ describe('選擇題位置與長度的檢查', () => {
  * 線的標籤（有的話）不能是空白、最多 VT_MAX_LABEL 個字（寫在最後一個點的右上方，太長會被切掉）；
  * 虛線長方形（有的話）的 t、v 都大於 0、不超過 tMax、vMax；caption 不能是空的。
  */
-const VT_MAX_SECONDS = 10;
-const VT_MAX_SPEED_CELLS = 11;
-const VT_MAX_LINES = 3;
-const VT_MAX_LABEL = 6;
-
 function vtGraphProblems(id: string, g: VtGraph): string[] {
   const problems: string[] = [];
   for (const [name, value] of [['tMax', g.tMax], ['vMax', g.vMax], ['vStep', g.vStep]] as const) {
