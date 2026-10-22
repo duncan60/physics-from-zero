@@ -744,6 +744,11 @@ it('第 2 站複習留下 2-5～2-7 真的犯過的錯：四對陷阱；friction
   expect(wrongs).toContain('(30 + 20) ÷ 5 = 10 N');
   expect(wrongs).toContain('單位是 F');
   expect(wrongs).toContain('正向力一樣大、方向相反，所以是一對作用力與反作用力');
+  // 錯的想法裡「一樣大」也要帶著條件：書靜放在水平桌上、沒有別的力壓
+  const normalTrap = review?.traps.find((t) => t.wrong.includes('正向力一樣大'))?.wrong ?? '';
+  expect(normalTrap).toContain('水平桌上');
+  expect(normalTrap).toContain('沒有別的力壓');
+  expect(normalTrap.indexOf('水平桌上')).toBeLessThan(normalTrap.indexOf('一樣大'));
 
   const net = review?.steps.find((s) => s.id === 'friction-net');
   if (net?.kind !== 'number') throw new Error('friction-net 不是數字題');
@@ -1326,8 +1331,8 @@ it('第 1 站複習涵蓋 1-6：速度–時間圖的公式（斜率 = 加速度
   if (step?.kind !== 'number') throw new Error('car-scooter-graph 不是數字題');
   expect(step.graph?.lines).toHaveLength(2);
   expect(step.answer).toBe(16);
-  // 只算了機車（24）、只算了汽車（40）、把機車當成整整 4 秒都是 12（8）：都有回饋，不說出答案
-  for (const value of [24, 40, 8]) {
+  // 只算了機車（24）、只算了汽車（40）、把機車當成整整 4 秒都是 12（8）、減出負的（−16）：都有回饋，不說出答案
+  for (const value of [24, 40, 8, -16]) {
     const feedback = step.wrongAnswers?.find((wrong) => wrong.value === value)?.feedback ?? '';
     expect(feedback, String(value)).toMatch(/\S/);
     expect(mentionsNumber(feedback, 16), String(value)).toBe(false);
