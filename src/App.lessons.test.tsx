@@ -10,7 +10,7 @@ import { emptyStats, lessonXp, recordQuestion } from './lib/game';
 import { PERFECT_BONUS_XP, STORAGE_KEY, XP_PER_FIRST_TRY, XP_PER_LESSON, emptyProgress, localDayKey } from './lib/progress';
 import type { Progress } from './lib/progress';
 import { RUNS_KEY, loadRun } from './lib/runs';
-import type { Lesson, StationReview, Step } from './lib/types';
+import type { Lesson, Station, StationReview, Step } from './lib/types';
 
 // 用真實的課程，透過真的 App 和真的上課畫面（不換掉 LessonPlayer）把課上完；每站的複習也一樣。
 // 每一題的正確答案直接從課程資料讀出來，再用角色和名稱找到選項、輸入框和按鈕，像學習者一樣作答。
@@ -273,51 +273,84 @@ it('看到完成畫面就已經存檔：沒按「回到地圖」直接按上一�
   expect(screen.getByText(`${gained} XP`)).toBeInTheDocument();
 });
 
-// 每多一課，這個測試就跑得更久；GitHub Actions 的機器比本機慢，預設的 5 秒不夠。
-it('依序上完每一課（每一題都第一次就答對）：每一課都會完成，並解鎖下一課；上完一站就看重點、做完複習', { timeout: 60_000 }, async () => {
-  const user = setupUser();
-  render(<App />);
-  let totalXp = 0;
-  const completed: string[] = [];
+/** 有課程的站，依站號排列。 */
+const stationsWithLessons = stations.filter((station) => station.lessons.length > 0);
 
-  for (const [index, lesson] of lessons.entries()) {
-    const next = lessons[index + 1] as Lesson | undefined;
-    if (next !== undefined) expect(lessonItem(next)).toHaveTextContent('鎖住');
+/** 第 1 站到第 stationId 站（含）的每一課和複習，都一次全對做完時的進度。 */
+function progressThrough(stationId: number): Progress {
+  const played = stationsWithLessons
+    .filter((station) => station.id <= stationId)
+    .flatMap((station) => {
+      const review = reviewOf(station.id);
+      return review === undefined ? station.lessons : [...station.lessons, reviewAsLesson(review)];
+    });
+  const completed = played.map((lesson) => lesson.id);
+  const xp = played.reduce((sum, lesson) => sum + cleanXp(lesson), 0);
+  return { ...emptyProgress(), completed, perfect: completed, xp, streak: 1, lastActiveDay: localDayKey(new Date()) };
+}
 
-    totalXp += await playLesson(user, lesson);
-    completed.push(lesson.id);
-    expect(storedProgress()).toMatchObject({ completed, xp: totalXp });
-    expect(screen.getByText(`${totalXp} XP`)).toBeInTheDocument(); // 頁首在完成畫面就更新了
+// 一站一個測試：新增一站的課程不用改這裡，失敗或變慢時看得出是哪一站。
+// 每一站從「前面的站都一次全對做完」的進度開始，也就是前一站的測試最後檢查的進度，所以串起來和從第一課一路上到最後一課一樣。
+// 一站有好幾課加上複習；GitHub Actions 的機器比本機慢，預設的 5 秒不夠。
+it.each(stationsWithLessons)(
+  '第 $id 站 $title：依序上完每一課（每一題都第一次就答對）：每一課都會完成，並解鎖下一課；上完這一站就看重點、做完複習',
+  { timeout: 60_000 },
+  async (station) => {
+    const previous = stationsWithLessons[stationsWithLessons.indexOf(station) - 1] as Station | undefined;
+    const start = previous === undefined ? emptyProgress() : progressThrough(previous.id);
+    if (previous !== undefined) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(start));
+    const user = setupUser();
+    render(<App />);
+    let totalXp = start.xp;
+    const completed = [...start.completed];
+    expect(lessonLink(station.lessons[0])).toHaveTextContent('可以上');
+    expect(lessonLink(station.lessons[0])).toHaveAttribute('aria-current', 'step');
 
-    const stationId = stationOf(lesson.id);
-    const review = stationId === undefined ? undefined : reviewOf(stationId);
-    if (review !== undefined && isLastLessonOfStation(lesson.id)) {
-      // 上完一站的最後一課：完成畫面的「看本站重點」→ 總結頁 →「開始複習」→ 做完 → 回到地圖，節點變成完美
-      await user.click(button('看本站重點'));
-      totalXp += await playReviewFromSummary(user, review);
-      completed.push(reviewLessonId(review.stationId));
-      expect(storedProgress()).toMatchObject({ completed, xp: totalXp });
-      expect(screen.queryByRole('button', { name: '看本站重點' })).not.toBeInTheDocument();
-      await user.click(button('回到地圖'));
-      expect(reviewLink(review.stationId)).toHaveTextContent('完美');
-    } else {
-      expect(screen.queryByRole('button', { name: '看本站重點' })).not.toBeInTheDocument();
-      await user.click(button('回到地圖'));
+    for (const lesson of station.lessons) {
+      const next = lessons[lessons.indexOf(lesson) + 1] as Lesson | undefined;
+      if (next !== undefined) expect(lessonItem(next), lesson.id).toHaveTextContent('鎖住');
+
+      totalXp += await playLesson(user, lesson);
+      completed.push(lesson.id);
+      expect(storedProgress(), lesson.id).toMatchObject({ completed, xp: totalXp });
+      expect(screen.getByText(`${totalXp} XP`)).toBeInTheDocument(); // 頁首在完成畫面就更新了
+
+      const stationId = stationOf(lesson.id);
+      const review = stationId === undefined ? undefined : reviewOf(stationId);
+      if (review !== undefined && isLastLessonOfStation(lesson.id)) {
+        // 上完一站的最後一課：完成畫面的「看本站重點」→ 總結頁 →「開始複習」→ 做完 → 回到地圖，節點變成完美
+        await user.click(button('看本站重點'));
+        totalXp += await playReviewFromSummary(user, review);
+        completed.push(reviewLessonId(review.stationId));
+        expect(storedProgress(), reviewLessonId(review.stationId)).toMatchObject({ completed, xp: totalXp });
+        expect(screen.queryByRole('button', { name: '看本站重點' })).not.toBeInTheDocument();
+        await user.click(button('回到地圖'));
+        expect(reviewLink(review.stationId)).toHaveTextContent('完美');
+      } else {
+        expect(screen.queryByRole('button', { name: '看本站重點' }), lesson.id).not.toBeInTheDocument();
+        await user.click(button('回到地圖'));
+      }
+
+      expect(window.location.hash).toBe('#/');
+      expect(lessonLink(lesson)).toHaveTextContent('完美');
+      if (next !== undefined) {
+        expect(lessonLink(next), lesson.id).toHaveTextContent('可以上');
+        expect(lessonLink(next), lesson.id).toHaveAttribute('aria-current', 'step');
+      }
     }
 
-    expect(window.location.hash).toBe('#/');
-    expect(lessonLink(lesson)).toHaveTextContent('完美');
-    if (next !== undefined) {
-      expect(lessonLink(next)).toHaveTextContent('可以上');
-      expect(lessonLink(next)).toHaveAttribute('aria-current', 'step');
+    // 這一站的複習做過了
+    if (reviewOf(station.id) !== undefined) expect(completed).toContain(reviewLessonId(station.id));
+    expect(storedProgress()).toMatchObject({ completed, perfect: completed, xp: totalXp, streak: 1 });
+    // 下一站的測試就從這個進度開始
+    const end = progressThrough(station.id);
+    expect(completed).toEqual(end.completed);
+    expect(totalXp).toBe(end.xp);
+    if (station === stationsWithLessons[stationsWithLessons.length - 1]) {
+      expect(screen.queryAllByRole('link', { current: 'step' })).toHaveLength(0); // 全部上完，沒有「目前這一課」
     }
-  }
-
-  // 每一站的複習都做過了
-  for (const review of reviews) expect(completed).toContain(reviewLessonId(review.stationId));
-  expect(storedProgress()).toMatchObject({ completed, perfect: completed, xp: totalXp, streak: 1 });
-  expect(screen.queryAllByRole('link', { current: 'step' })).toHaveLength(0); // 全部上完，沒有「目前這一課」
-});
+  },
+);
 
 it('複習第一題答錯：節點是「已完成」；再做一次全對：變成「完美」；下一站第一課一直都是目前這一課', { timeout: 60_000 }, async () => {
   const [review] = reviews;
