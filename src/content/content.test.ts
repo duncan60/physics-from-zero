@@ -492,6 +492,33 @@ it('2-1 full-cart-accel：力 ÷ 滿車質量算對；滿車質量 ÷ 力是錯�
   }
 });
 
+// 上課時真的答了 10：把 1 秒最後那一刻的速度當成平均速度。回饋只說方向，不說出答案 5。
+it('2-5 第 1 秒的平均速度：答案 5；真的答過的 10 有回饋（10 是最後那一刻的速度），不說出答案，答錯後有引導', () => {
+  const step = findStep('2-5', 'first-second-average');
+  if (step?.kind !== 'number') throw new Error('first-second-average 不是數字題');
+  expect(step.answer).toBe(5);
+  const feedback = step.wrongAnswers?.find((wrong) => wrong.value === 10)?.feedback ?? '';
+  expect(feedback).toContain('最後那一刻');
+  expect(feedback).toContain('大部分時間都比 10 慢');
+  expect(mentionsNumber(feedback, 5)).toBe(false);
+  expect(step.guide?.length ?? 0).toBeGreaterThan(0);
+});
+
+// 兩塊 2 一塊是取平均、一塊是時間：對調之後數字碰巧一樣，但用途反了。
+it('2-5 two-second-distance：(0 + 20) ÷ 2 × 2 算對；兩塊 2 對調、(20 − 0) 碰巧算對但是錯的，有回饋', () => {
+  const step = findStep('2-5', 'two-second-distance');
+  if (step?.kind !== 'formula') throw new Error('two-second-distance 不是拼算式');
+  expect(sameFormula(step.accepted[0], ['(', '0|一開始速度', '+', '20|最後速度', ')', '÷', '2|取平均', '×', '2|時間'])).toBe(true);
+  expect(checkFormula(step, ['2|時間', '×', '(', '0|一開始速度', '+', '20|最後速度', ')', '÷', '2|取平均'])).toEqual({ correct: true });
+  for (const formula of [
+    ['(', '0|一開始速度', '+', '20|最後速度', ')', '÷', '2|時間', '×', '2|取平均'],
+    ['(', '20|最後速度', '−', '0|一開始速度', ')', '÷', '2|取平均', '×', '2|時間'],
+    ['20|最後速度', '×', '2|時間'],
+  ]) {
+    expect(checkFormula(step, formula), formula.join(' ')).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
+  }
+});
+
 it('第 2 站複習 bus-brake-size：質量 × 加速度大小算對（× 可以對調）；用了地球 g 是錯的，有回饋', () => {
   const step = reviewOf(2)?.steps.find((s) => s.id === 'bus-brake-size');
   if (step?.kind !== 'formula') throw new Error('bus-brake-size 不是拼算式');
@@ -593,6 +620,16 @@ it('2-4 moon-weight：1 是質量、1.6 是月球 g、10 是地球 g', () => {
     ['+', undefined],
     ['×', undefined],
     ['÷', undefined],
+  ]);
+});
+
+it('2-5 two-second-distance：兩塊「2」分別標示「取平均」和「時間」，其他數字也標出是什麼', () => {
+  expect(labelledTiles(findStep('2-5', 'two-second-distance')).filter(([, label]) => label !== undefined)).toEqual([
+    ['0', '一開始速度'],
+    ['2', '取平均'],
+    ['2', '時間'],
+    ['5', '第 1 秒落下'],
+    ['20', '最後速度'],
   ]);
 });
 
