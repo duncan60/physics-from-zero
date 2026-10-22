@@ -607,6 +607,64 @@ it('2-5 two-second-distance：(0 + 20) ÷ 2 × 2 算對；兩塊 2 對調、(20 
   }
 });
 
+// 少了括號（× ÷ 先算，只有一個速度被取平均）、省略 0 只算到平均速度、用標著「時間」的 2 取平均：
+// 都要有針對那一步的回饋，不能只有「還不對」。少了括號的回饋不說出答案，也不提順序。
+it('2-5 two-second-distance：少了括號的各種順序、只算到平均速度的 20 ÷ 2、拿「時間」的 2 取平均，都有針對的回饋', () => {
+  const step = findStep('2-5', 'two-second-distance');
+  if (step?.kind !== 'formula') throw new Error('two-second-distance 不是拼算式');
+  const start = '0|一開始速度';
+  const half = '2|取平均';
+  const time = '2|時間';
+  const end = '20|最後速度';
+  const feedbackOf = (formula: string[]): string => {
+    const result = checkFormula(step, formula);
+    expect(result.correct, formula.join(' ')).toBe(false);
+    return result.correct ? '' : (result.feedback ?? '');
+  };
+  for (const formula of [
+    [start, '+', end, '÷', half, '×', time],
+    [end, '+', start, '÷', half, '×', time],
+    [end, '÷', half, '×', time, '+', start], // + 兩邊對調是同一個算式
+    [time, '×', start, '+', end, '÷', half],
+    [time, '×', end, '+', start, '÷', half],
+    [start, '+', time, '×', end, '÷', half],
+    [end, '+', time, '×', start, '÷', half],
+  ]) {
+    const feedback = feedbackOf(formula);
+    expect(feedback, formula.join(' ')).toContain('括號');
+    expect(feedback, formula.join(' ')).toContain('取平均');
+    expect(mentionsNumber(feedback, step.answer), formula.join(' ')).toBe(false);
+    expect(feedback, formula.join(' ')).not.toMatch(/順序/);
+  }
+  expect(feedbackOf([end, '÷', half])).toContain('還要乘上時間');
+  const timeAsHalf = feedbackOf(['(', start, '+', end, ')', '÷', time]);
+  expect(timeAsHalf).toContain('標著「時間」的 2');
+  expect(timeAsHalf).toContain('取平均');
+});
+
+// 通用的表格提示問「每一格之間變化的量一樣嗎」，這張表是用 W = m × g、a = W ÷ m 算的，要有自己的提示。
+// 提示只指方向：不寫任何數字（10 公斤的 10 也是空格的答案）。
+it('2-5 two-balls-table：答錯時的提示是這張表自己的（先用 W = m × g，再用 a = W ÷ m），不寫數字', () => {
+  const step = findStep('2-5', 'two-balls-table');
+  if (step?.kind !== 'table') throw new Error('two-balls-table 不是表格題');
+  const hint = step.retryHint ?? '';
+  expect(hint).toContain('W = m × g');
+  expect(hint).toContain('a = W ÷ m');
+  expect(hint).not.toMatch(/[0-9]/);
+});
+
+// 1-4 往上丟的球是往上為正、加速度 −10；2-5 第 2 步的表格就要填 +10，所以第 2 步先提一句，後面的觀念卡再完整說明。
+it('2-5 往下當成正的：第一次填加速度的 two-balls-table 題目就先說，falling-speed 觀念卡再完整說明', () => {
+  const steps = findLesson('2-5')?.steps ?? [];
+  const tableIndex = steps.findIndex((s) => s.id === 'two-balls-table');
+  const conceptIndex = steps.findIndex((s) => s.id === 'falling-speed');
+  expect(tableIndex).toBeGreaterThanOrEqual(0);
+  expect(tableIndex).toBeLessThan(conceptIndex);
+  const table = steps[tableIndex];
+  expect(table.kind === 'table' ? table.prompt : '').toContain('這一課把往下當成正的');
+  expect(conceptText('2-5', 'falling-speed')).toContain('這裡把往下當成正的');
+});
+
 // 上課時真的寫了「(30+20)÷ 5 = 10N」：相加對了，但多除了質量，算出來的是加速度。回饋說多算了一步，不說出答案 50。
 it('2-6 同方向的合力：答案 50 N；真的答過的 10 有「多算了一步」的回饋（再 ÷ 質量是加速度），不說出答案，答錯後有引導', () => {
   const step = findStep('2-6', 'same-direction-net');
@@ -619,6 +677,21 @@ it('2-6 同方向的合力：答案 50 N；真的答過的 10 有「多算了一
   expect(feedback).toContain('加速度');
   expect(mentionsNumber(feedback, 50)).toBe(false);
   expect(step.guide?.length ?? 0).toBeGreaterThan(0);
+});
+
+// 引導的例子不能用原題的數字：答 10 的人不會在引導裡看到「= 10」，購物車的 5 也不會被拿去當結果，引導也不寫出答案 50。
+it('2-6 same-direction-net 的引導：例子是 3 公斤的箱子、8 N + 4 N = 12 N、12 ÷ 3 = 4，不用原題的 10、5、50', () => {
+  const step = findStep('2-6', 'same-direction-net');
+  if (step?.kind !== 'number') throw new Error('same-direction-net 不是數字題');
+  const card = step.guide?.find((g) => g.id === 'same-direction-stop');
+  if (card?.kind !== 'concept') throw new Error('找不到 same-direction-stop');
+  const text = card.body.join('');
+  expect(text).toContain('3 公斤的箱子');
+  expect(text).toContain('8 + 4 = 12');
+  expect(text).toContain('12 ÷ 3 = 4');
+  for (const value of [10, 5, 50]) expect(mentionsNumber(text, value), `例子裡出現了 ${value}`).toBe(false);
+  // 整個引導（包括回到購物車的選擇題）都不把 10、5、50 寫成算出來的結果
+  expect(JSON.stringify(step.guide)).not.toMatch(/= ?(10|5|50)(?![0-9.])/);
 });
 
 // F = m × a 的 F 是合力：只用一個人的力、把反方向的力相加都不對；少了括號、碰巧算出 2 的 30 ÷ (20 − 5) 也要有回饋。
@@ -683,6 +756,46 @@ it('2-7 upward-force 的「阻力」選項有回饋，不說出答案也不下�
   if (size?.kind !== 'number') throw new Error('normal-size 不是數字題');
   expect(size.answer).toBe(10);
   expect(size.explanation).toContain('這一題正向力和重力一樣大');
+});
+
+// 正向力 = 重力不是一般規則：「書不動 → 一樣大」只在只有這兩個力時成立，引導的題目、錯誤選項的回饋和說明都帶著這個條件。
+it('2-7 normal-vs-weight：題目寫明水平桌上、這一題只有這兩個力；錯誤選項的回饋和說明也帶著條件', () => {
+  const size = findStep('2-7', 'normal-size');
+  const guide = size?.kind === 'number' ? size.guide?.find((g) => g.id === 'normal-vs-weight') : undefined;
+  if (guide?.kind !== 'choice') throw new Error('找不到 normal-vs-weight');
+  expect(guide.answer).toBe('equal');
+  expect(guide.prompt).toContain('水平');
+  expect(guide.prompt).toContain('這一題只有這兩個力');
+  for (const option of guide.options) {
+    if (option.id !== guide.answer) expect(option.feedback, option.id).toContain('只有這兩個力時');
+  }
+  expect(guide.explanation).toContain('這一題只有這兩個力');
+});
+
+// 2-6 才練過 a = F ÷ m 的 F 是合力；書靜放在桌上時，書拉地球的力也會經過桌子、地板抵消，地球不是只受這一個力。
+// 所以「地球看不出被拉動」寫成「就算地球只受到這個力…」，不拿單一個力套 F ÷ m；回饋也不寫出 10。
+it('2-7 reaction：說明和「比 10 N 小很多」的回饋都寫「就算地球只受到」，不拿單一個力套 F ÷ m', () => {
+  const step = findStep('2-7', 'reaction');
+  if (step?.kind !== 'choice') throw new Error('reaction 不是選擇題');
+  expect(step.answer).toBe('book-up');
+  const small = step.options.find((o) => o.id === 'book-small')?.feedback ?? '';
+  for (const text of [step.explanation, small]) {
+    expect(text).toContain('就算地球只受到');
+    expect(text).not.toContain('F ÷ m');
+  }
+  expect(mentionsNumber(small, 10)).toBe(false);
+});
+
+// 2-3 說「推在」，2-7 說「作用在」：2-7 的引導把兩個說法接起來，第 2 站複習統一用「作用在」。
+it('2-7 who-acts-on 把 2-3 的「推在牆上」接到「作用在牆上」；第 2 站複習用「作用在」，不用「推在」', () => {
+  const step = findStep('2-7', 'acts-on');
+  const card = step?.kind === 'choice' ? step.guide?.find((g) => g.id === 'who-acts-on') : undefined;
+  if (card?.kind !== 'concept') throw new Error('找不到 who-acts-on');
+  expect(card.body.join('')).toContain('「推在牆上」，就是力作用在牆上');
+  const review = reviewOf(2);
+  expect(JSON.stringify(review)).not.toContain('推在');
+  const trap = review?.traps.find((t) => t.wrong.startsWith('作用力和反作用力一樣大'));
+  expect(trap?.right).toContain('作用在不同的東西上');
 });
 
 it('第 2 站複習 bus-brake-size：質量 × 加速度大小算對（× 可以對調）；用了地球 g 是錯的，有回饋', () => {
