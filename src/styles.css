@@ -2183,9 +2183,10 @@ a.path-node:active .path-node-circle {
   stroke-linejoin: round;
 }
 
+/* 點外面一圈背景色，線交叉時點也分得出來；上課的卡片直接放在 --bg 上 */
 .lp-vt-line circle {
   fill: currentColor;
-  stroke: var(--surface);
+  stroke: var(--bg);
   stroke-width: 1.5;
 }
 

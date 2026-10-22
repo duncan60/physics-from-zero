@@ -877,14 +877,33 @@ describe('選擇題位置與長度的檢查', () => {
 
 /**
  * 一張速度–時間圖有什麼問題，沒有問題時是空陣列：
- * tMax、vMax、vStep 都要大於 0；至少一條線，每條線至少 2 個點、時間嚴格遞增，每個點都在 0～tMax 秒、0～vMax 公尺/秒以內；
- * 線的標籤（有的話）不能是空白；虛線長方形（有的話）的 t、v 都大於 0、不超過 tMax、vMax；caption 不能是空的。
+ * tMax、vMax、vStep 都要大於 0；時間軸固定每 1 秒一格，所以 tMax 是整數、最多 VT_MAX_SECONDS 秒（兩位數的數字才不會擠在一起）；
+ * vMax 是 vStep 的整數倍（最上面那一格才有數字），最多 VT_MAX_SPEED_CELLS 格（每一格才有 20 的間距，見 VtGraphView）；
+ * 一到 VT_MAX_LINES 條線（線的顏色只有 3 種），每條線至少 2 個點、時間嚴格遞增，每個點都在 0～tMax 秒、0～vMax 公尺/秒以內；
+ * 線的標籤（有的話）不能是空白、最多 VT_MAX_LABEL 個字（寫在最後一個點的右上方，太長會被切掉）；
+ * 虛線長方形（有的話）的 t、v 都大於 0、不超過 tMax、vMax；caption 不能是空的。
  */
+const VT_MAX_SECONDS = 10;
+const VT_MAX_SPEED_CELLS = 11;
+const VT_MAX_LINES = 3;
+const VT_MAX_LABEL = 6;
+
 function vtGraphProblems(id: string, g: VtGraph): string[] {
   const problems: string[] = [];
   for (const [name, value] of [['tMax', g.tMax], ['vMax', g.vMax], ['vStep', g.vStep]] as const) {
     if (!(Number.isFinite(value) && value > 0)) problems.push(`${id}：${name} 要大於 0（現在是 ${value}）`);
   }
+  if (Number.isFinite(g.tMax) && (!Number.isInteger(g.tMax) || g.tMax > VT_MAX_SECONDS)) {
+    problems.push(`${id}：tMax 要是整數、最多 ${VT_MAX_SECONDS} 秒（現在是 ${g.tMax}）：時間軸每 1 秒一格`);
+  }
+  if (g.vMax > 0 && g.vStep > 0) {
+    const cells = g.vMax / g.vStep;
+    const whole = Math.abs(cells - Math.round(cells)) <= EPSILON;
+    if (!whole || Math.round(cells) > VT_MAX_SPEED_CELLS) {
+      problems.push(`${id}：vMax ${g.vMax} 要是 vStep ${g.vStep} 的整數倍、最多 ${VT_MAX_SPEED_CELLS} 格（現在是 ${cells} 格）`);
+    }
+  }
+  if (g.lines.length > VT_MAX_LINES) problems.push(`${id}：最多 ${VT_MAX_LINES} 條線（現在有 ${g.lines.length} 條），第 ${VT_MAX_LINES + 1} 條會和第 1 條同色`);
   const inT = (t: number): boolean => Number.isFinite(t) && t >= 0 && t <= g.tMax;
   const inV = (v: number): boolean => Number.isFinite(v) && v >= 0 && v <= g.vMax;
   const range = `0～${g.tMax} 秒、0～${g.vMax} 公尺/秒`;
@@ -897,6 +916,7 @@ function vtGraphProblems(id: string, g: VtGraph): string[] {
       if (j > 0 && !(t > line.points[j - 1][0])) problems.push(`${where}的時間沒有遞增：${line.points[j - 1][0]} 秒之後是 ${t} 秒`);
     }
     if (line.label !== undefined && line.label.trim() === '') problems.push(`${where}的標籤是空白`);
+    else if (line.label !== undefined && [...line.label].length > VT_MAX_LABEL) problems.push(`${where}的標籤「${line.label}」超過 ${VT_MAX_LABEL} 個字`);
   }
   if (g.box !== undefined) {
     const { t, v } = g.box;
@@ -958,6 +978,31 @@ describe('vtGraphProblems（速度–時間圖的內容檢查）', () => {
   it('caption 和線的標籤不能是空白', () => {
     expect(vtGraphProblems('demo', { ...good, caption: ' ' })).toHaveLength(1);
     expect(vtGraphProblems('demo', { ...good, lines: [{ points: [[0, 0], [2, 10]], label: '' }] })).toHaveLength(1);
+  });
+  // 時間軸固定每 1 秒一格：tMax 不是整數，最後一格沒有數字；超過 10 秒，兩位數的數字會擠在一起
+  it('tMax 是整數，最多 10 秒', () => {
+    expect(vtGraphProblems('demo', { ...good, tMax: 10 })).toEqual([]);
+    expect(vtGraphProblems('demo', { ...good, tMax: 2.5, box: undefined, lines: [{ points: [[0, 0], [2.5, 10]] }] })).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, tMax: 11 })).toHaveLength(1);
+  });
+  // vMax 不是 vStep 的整數倍，最上面那一格沒有數字；超過 11 格，數字會擠在一起
+  it('vMax 是 vStep 的整數倍，最多 11 格（小數的格子也可以）', () => {
+    expect(vtGraphProblems('demo', { ...good, vMax: 0.6, vStep: 0.2, box: undefined, lines: [{ points: [[0, 0.2], [2, 0.6]] }] })).toEqual([]);
+    expect(vtGraphProblems('demo', { ...good, vMax: 11, vStep: 1 })).toEqual([]);
+    expect(vtGraphProblems('demo', { ...good, vMax: 10, vStep: 4 })).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, vMax: 12, vStep: 1 })).toHaveLength(1);
+  });
+  // 線的顏色有 3 種，第 4 條會和第 1 條同色
+  it('最多 3 條線', () => {
+    const line = { points: [[0, 1], [3, 1]] as [number, number][] };
+    expect(vtGraphProblems('demo', { ...good, lines: [line, line, line] })).toEqual([]);
+    expect(vtGraphProblems('demo', { ...good, lines: [line, line, line, line] })).toHaveLength(1);
+  });
+  // 標籤寫在最後一個點的右上方，太長會被切掉
+  it('線的標籤最多 6 個字', () => {
+    const labelled = (label: string): VtGraph => ({ ...good, lines: [{ points: [[0, 0], [2, 10]], label }] });
+    expect(vtGraphProblems('demo', labelled('往上丟的球車'))).toEqual([]);
+    expect(vtGraphProblems('demo', labelled('往上丟出去的球'))).toHaveLength(1);
   });
   it('graphsOf 找得到主步驟和引導裡的圖', () => {
     const lesson: Lesson = {

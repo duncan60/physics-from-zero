@@ -8,7 +8,10 @@ const FONT = 14; // 圖上的字（數字、座標軸、線的標籤），viewBo
 const PAD_LEFT = 38; // 速度的數字（最多三位數）寫在這裡
 const PAD_TOP = 34; // 上面一行寫「速度（公尺/秒）」
 const PAD_RIGHT = 16; // 最右邊那一格的時間數字有一半在圖外
-const PLOT_H = 150; // 圖的高度；速度的格子很多時會變高，每一格至少 MIN_V_GAP，最高 MAX_PLOT_H
+// 圖的高度；速度的格子很多時會變高，每一格至少 MIN_V_GAP，最高 MAX_PLOT_H。
+// 內容檢查（content.test.ts 的 vtGraphProblems）限制速度最多 11 格（11 × 20 = 220），時間最多 10 秒、線最多 3 條、標籤最多 6 個字，
+// 在這些限制以內，數字不會擠在一起、每條線的顏色不同、標籤不會被切掉。
+const PLOT_H = 150;
 const MIN_V_GAP = 20;
 const MAX_PLOT_H = 220;
 const PAD_BOTTOM = 46; // 時間的數字一行、「時間（秒）」一行
@@ -78,7 +81,6 @@ export function VtGraphView(props: { graph: VtGraph }): React.JSX.Element {
   const left = x(0);
   const bottom = y(0);
   const at = ([t, v]: [number, number]): string => `${x(t)},${y(v)}`;
-
 
   return (
     <svg className="lp-vt" viewBox={`0 0 ${VIEW_W} ${viewH}`} width="100%" role="img" aria-label={graph.caption}>

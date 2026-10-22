@@ -97,6 +97,30 @@ it('每條線畫一條折線，每個點一個圓點，折線穿過每個圓點'
   }
 });
 
+it('刻度的數字和點用同一把尺：「2」和 2 秒的點左右對齊，「10」和 10 公尺/秒的點的高度差在每張圖都一樣', () => {
+  // 三張圖的比例都不一樣：右邊的留白（標籤長短）不同、速度的格子數（圖的高度）不同，
+  // 而且 10 不一定在最上面（在最上面時，比例尺錯了也看不出來）。每張圖第一條線的第 2 個點都是 (2, 10)。
+  const graphs: VtGraph[] = [
+    graph,
+    { ...plain, tMax: 4, vMax: 20, vStep: 5, lines: [{ points: [[0, 0], [2, 10], [4, 20]], label: '很長的標籤' }] },
+    { ...plain, tMax: 3, vMax: 11, vStep: 1, lines: [{ points: [[0, 0], [2, 10]] }] },
+  ];
+  const offsets = graphs.map((g) => {
+    const { container, unmount } = render(<VtGraphView graph={g} />);
+    const [cx, cy] = dots(container.querySelectorAll('.lp-vt-line')[0])[1];
+    const tick = (selector: string, text: string) => [...container.querySelectorAll(selector)].find((n) => n.textContent === text);
+    const two = tick('.lp-vt-tick--t', '2');
+    const ten = tick('.lp-vt-tick--v', '10');
+    expect(two).toBeDefined();
+    expect(ten).toBeDefined();
+    expect(Number(two?.getAttribute('x'))).toBe(cx);
+    const offset = Number(ten?.getAttribute('y')) - cy;
+    unmount();
+    return offset;
+  });
+  expect(new Set(offsets).size).toBe(1);
+});
+
 it('時間越大越右邊、速度越大越上面，全部畫在 viewBox 裡面', () => {
   const { container } = render(<VtGraphView graph={graph} />);
   const [, , width, height] = (svgOf(container).getAttribute('viewBox') ?? '').split(' ').map(Number);
