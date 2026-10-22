@@ -139,6 +139,11 @@
   box-sizing: border-box;
 }
 
+/* 有 hidden 屬性的元素一定不顯示：瀏覽器內建的 [hidden] 會被 display: flex 這類樣式（例如 .lp-resume）蓋掉 */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background-color: var(--bg);
