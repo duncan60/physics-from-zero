@@ -28,14 +28,15 @@ const INCOMPLETE_FORMULA = '算式還沒拼完：括號要成對，符號兩邊�
 // 答錯、又沒有對應的回饋時，「還不對」下面的通用提示，不會只剩一句「還不對」。
 const NUMBER_RETRY_HINT = '檢查一下：用的是哪個公式？正負號和小數點對嗎？';
 const GUIDE_SUGGESTION = '也可以按「一步一步來」。';
+// 表格題沒有自己的 retryHint 時用這一句（寫給每一格依序變化的表格）。
 const TABLE_RETRY_HINT = '標出來的格子再看一次：每一格之間變化的量一樣嗎？';
 
 /**
  * 答錯、沒有對應的回饋時的通用提示：數字題和拼算式的第 2 步（算出答案）是同一句，有「一步一步來」按鈕時再提一下它；
- * 表格題請他再看標出來的格子。其他（選擇題、拼算式的第 1 步、滑桿）的回饋都由內容提供，這裡不補。
+ * 表格題用那一題自己的 retryHint，沒有的話請他再看標出來的格子。其他（選擇題、拼算式的第 1 步、滑桿）的回饋都由內容提供，這裡不補。
  */
 function retryHint(step: QuestionStep, formulaDone: boolean, canGuide: boolean): string | null {
-  if (step.kind === 'table') return TABLE_RETRY_HINT;
+  if (step.kind === 'table') return step.retryHint ?? TABLE_RETRY_HINT;
   if (step.kind === 'number' || (step.kind === 'formula' && formulaDone)) {
     return canGuide ? `${NUMBER_RETRY_HINT}${GUIDE_SUGGESTION}` : NUMBER_RETRY_HINT;
   }

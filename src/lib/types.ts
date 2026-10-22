@@ -15,7 +15,8 @@ export interface WrongAnswer { value: number; feedback: string }
 export interface NumberStep { kind: 'number'; id: string; prompt: string; answer: number; tolerance?: number; unit?: string; wrongAnswers?: WrongAnswer[]; explanation: string; guide?: GuideStep[]; graph?: VtGraph }
 export type TableCell = string | { answer: number; tolerance?: number };
 export interface TableRow { label: string; cells: TableCell[] }
-export interface TableStep { kind: 'table'; id: string; prompt: string; columns: string[]; rows: TableRow[]; explanation: string; guide?: GuideStep[]; graph?: VtGraph }
+// retryHint（可選）：答錯時「還不對」下面的提示，取代通用的表格提示（那一句是寫給「每一格依序變化」的表格的）。只指方向，不說出答案。
+export interface TableStep { kind: 'table'; id: string; prompt: string; columns: string[]; rows: TableRow[]; explanation: string; guide?: GuideStep[]; graph?: VtGraph; retryHint?: string }
 export interface SimStep { kind: 'sim'; id: string; sim: 'bus-ball'; prompt: string }
 export interface FormulaWrongForm { tokens: string[]; feedback: string }
 // 算對、但寫法比正式寫法省略了什麼（例如省略 + 0）：tokens 要是 accepted 裡的某一種寫法（不是第一個），note 是算式下面一則中性的「提醒」（算式拼對、進到第 2 步時就出現），輕輕說明正式寫法。

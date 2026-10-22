@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RUNS_KEY, loadRun, saveRun } from '../lib/runs';
 import type { SoundKind } from '../lib/sound';
-import type { Lesson } from '../lib/types';
+import type { Lesson, TableStep } from '../lib/types';
 import { LessonPlayer } from './LessonPlayer';
 import { SoundProvider } from './SoundContext';
 
@@ -1366,6 +1366,18 @@ it('表格題答錯：「還不對」加上通用提示', async () => {
   expect(screen.getByText('還不對')).toBeInTheDocument();
   expect(screen.getByText(TABLE_RETRY_HINT)).toBeInTheDocument();
   expect(screen.queryByText(NUMBER_RETRY_HINT)).not.toBeInTheDocument();
+});
+
+// 通用的表格提示是寫給每一格依序變化的表格；寬 × 高 = 面積這類表格要用自己的提示。
+it('表格題有自己的 retryHint：答錯時顯示那一句，不顯示通用提示', async () => {
+  const hint = '每一行只用自己那一行的數字。';
+  const { user } = renderPlayer({ ...tableLesson, steps: [{ ...(tableLesson.steps[0] as TableStep), retryHint: hint }] });
+  await user.type(screen.getByRole('textbox', { name: '速度，1 秒' }), '8');
+  await user.type(screen.getByRole('textbox', { name: '速度，2 秒' }), '7');
+  await user.click(button('檢查'));
+  expect(screen.getByText('還不對')).toBeInTheDocument();
+  expect(screen.getByText(hint)).toBeInTheDocument();
+  expect(screen.queryByText(TABLE_RETRY_HINT)).not.toBeInTheDocument();
 });
 
 it('數字輸入框下方有格式提示，輸入框的說明也念得到', () => {
