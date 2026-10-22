@@ -636,6 +636,59 @@ it('第 2 站複習的月球購物車滑桿：購物車 15 公斤', () => {
   expect(reviewOf(2)?.steps.find((s) => s.id === 'moon-cart-force')).toMatchObject({ kind: 'slider', anim: 'cart', cartMass: 15, answer: 30 });
 });
 
+// 第 2 站複習涵蓋 2-5～2-7：重點、公式都留著條件（不考慮空氣阻力、同一條直線、正向力 = 重力只是「這一題」）。
+it('第 2 站重點與公式涵蓋 2-5～2-7：平衡、這一題的正向力、落下的加速度 g；合力只算同一條直線上的力', () => {
+  const review = reviewOf(2);
+  const points = review?.points ?? [];
+  expect(points.find((p) => p.includes('平衡'))).toContain('合力是 0');
+  expect(points.find((p) => p.includes('正向力'))).toContain('這一題');
+  expect(points.find((p) => p.includes('落下的加速度'))).toContain('不考慮空氣阻力');
+  const formulas = review?.formulas ?? [];
+  expect(formulas.find((f) => f.name.startsWith('合力'))?.name).toContain('同一條直線');
+  expect(formulas.find((f) => f.name.startsWith('落下的加速度'))?.name).toContain('不考慮空氣阻力');
+});
+
+// 2-5～2-7 上課時真的犯過的錯：陷阱裡都有；多除了質量、把重力當成正向力的反作用力，也做成複習題的回饋，不說出答案。
+it('第 2 站複習留下 2-5～2-7 真的犯過的錯：四對陷阱；friction-net 的 3、floor-reaction 的「地球往下拉」有回饋，不說出答案', () => {
+  const review = reviewOf(2);
+  const wrongs = review?.traps.map((t) => t.wrong).join('\n') ?? '';
+  expect(wrongs).toContain('平均速度是 10');
+  expect(wrongs).toContain('(30 + 20) ÷ 5 = 10 N');
+  expect(wrongs).toContain('單位是 F');
+  expect(wrongs).toContain('正向力一樣大、方向相反，所以是一對作用力與反作用力');
+
+  const net = review?.steps.find((s) => s.id === 'friction-net');
+  if (net?.kind !== 'number') throw new Error('friction-net 不是數字題');
+  expect(net.answer).toBe(30);
+  expect(net.prompt).toContain('同一條直線');
+  const extraStep = net.wrongAnswers?.find((wrong) => wrong.value === 3)?.feedback ?? '';
+  expect(extraStep).toContain('多算了一步');
+  expect(mentionsNumber(extraStep, 30)).toBe(false);
+
+  const reaction = review?.steps.find((s) => s.id === 'floor-reaction');
+  if (reaction?.kind !== 'choice') throw new Error('floor-reaction 不是選擇題');
+  expect(reaction.answer).toBe('press-down');
+  expect(reaction.prompt).toContain('沒有別的力往上或往下壓');
+  expect(reaction.explanation).toContain('這一題');
+  const weight = reaction.options.find((o) => o.id === 'weight')?.feedback ?? '';
+  expect(weight).toContain('作用在米袋上');
+  expect(weight).not.toContain('壓地板');
+});
+
+it('第 2 站複習 fall-numbers：平均速度 5 公尺/秒和 1 秒時的速度 10 公尺/秒分開配；題目寫明不考慮空氣阻力、往下為正', () => {
+  const step = reviewOf(2)?.steps.find((s) => s.id === 'fall-numbers');
+  if (step?.kind !== 'match') throw new Error('fall-numbers 不是配對題');
+  expect(step.pairs).toEqual(
+    expect.arrayContaining([
+      { left: '5 公尺/秒', right: '平均速度' },
+      { left: '10 公尺/秒', right: '1 秒時的速度' },
+      { left: '10 公尺/秒²', right: '加速度' },
+    ]),
+  );
+  expect(step.prompt).toContain('不考慮空氣阻力');
+  expect(step.prompt).toContain('往下當成正的');
+});
+
 // ---- 拼算式的方塊標示：數值相同的方塊一定分得出來 ----
 
 describe('tileLabelProblems（方塊標示的內容檢查）', () => {
