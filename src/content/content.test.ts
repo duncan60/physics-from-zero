@@ -494,6 +494,35 @@ it('1-6 frame-table：第一行已填好、第二行的高不一樣；抄第一�
   expect(feedback).toContain('第二行自己的高');
   for (const text of [feedback, guide.prompt, guide.explanation]) expect(mentionsNumber(text, width * height), text).toBe(false);
   expect(guide.wrongAnswers?.some((wrong) => wrong.value === copied)).toBe(true);
+  // 引導的題目不寫出第二行的高（要從圖上的虛線長方形讀），抄第一行的高才是還可能答錯的答案
+  expect(mentionsNumber(guide.prompt, height), guide.prompt).toBe(false);
+  expect(guide.graph?.box).toEqual({ t: width, v: height });
+  // 答錯時的提示是這張表自己的（每一行只用自己的寬和高），不是通用的「每一格之間變化的量」
+  expect(step.retryHint).toContain('自己那一行');
+});
+
+// 「斜率」在第 3 步的題目裡就要用，所以第 2 步的題目先說出它是什麼，條件（這裡每次只看 1 秒）寫在旁邊。
+it('1-6 rise-per-second 的題目先說出斜率是什麼（這裡每次只看 1 秒），說明再給精確的說法', () => {
+  const step = findStep('1-6', 'rise-per-second');
+  if (step?.kind !== 'choice') throw new Error('rise-per-second 不是選擇題');
+  expect(step.prompt).toContain('叫做斜率');
+  expect(step.prompt).toContain('這裡每次只看 1 秒');
+  expect(step.explanation).toContain('上升的量 ÷ 往右的量');
+});
+
+// 梯形的說法是關於（一開始 + 最後）÷ 2 × 時間 這個公式，條件要寫在旁邊：速度平均地變化、一路往同一個方向。
+it('1-6 ball-check：梯形的說法帶著條件（速度平均地變化、一路往同一個方向）；triangle-half 答 3（平均速度）的回饋說還要乘上時間', () => {
+  const step = findStep('1-6', 'ball-check');
+  if (step?.kind !== 'number') throw new Error('ball-check 不是數字題');
+  const sentence = step.explanation.split('。').find((part) => part.includes('梯形')) ?? '';
+  expect(sentence).toContain('速度平均地變化');
+  expect(sentence).toContain('一路往同一個方向');
+  const triangle = findStep('1-6', 'triangle-half');
+  if (triangle?.kind !== 'number') throw new Error('triangle-half 不是數字題');
+  const three = triangle.wrongAnswers?.find((wrong) => wrong.value === 3)?.feedback ?? '';
+  expect(three).toContain('平均速度');
+  expect(three).toContain('還要乘上時間');
+  expect(mentionsNumber(three, triangle.answer)).toBe(false);
 });
 
 // 「÷ 2 從哪裡來」：陷阱選項「因為時間剛好是 2 秒」要留著，例子也剛好 2 秒；回饋呼應 1-5 的 ÷ 3（3 秒也是 ÷ 2），不說出答案。
@@ -1125,6 +1154,17 @@ function lessonContentChecks(lesson: Lesson): void {
       if (s.kind !== 'table') continue;
       for (const blank of blankCells(s)) {
         expect(blank.answer, `${s.id}：第 ${blank.row + 1} 列第 ${blank.col + 1} 格的答案是負數`).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  // 表格題自己的答錯提示（retryHint，取代通用的表格提示）：有寫的話不能是空白，也不能說出空格的答案。
+  it('表格題的 retryHint（有的話）不是空的，也不說出空格的答案', () => {
+    for (const s of allQuestions(lesson)) {
+      if (s.kind !== 'table' || s.retryHint === undefined) continue;
+      expect(s.retryHint.trim(), `${s.id}：retryHint 是空的`).not.toBe('');
+      for (const blank of blankCells(s)) {
+        expect(mentionsNumber(s.retryHint, blank.answer), `${s.id}：retryHint 說出了答案 ${blank.answer}`).toBe(false);
       }
     }
   });
