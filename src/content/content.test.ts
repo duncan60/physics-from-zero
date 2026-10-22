@@ -519,6 +519,54 @@ it('2-5 two-second-distance：(0 + 20) ÷ 2 × 2 算對；兩塊 2 對調、(20 
   }
 });
 
+// 上課時真的寫了「(30+20)÷ 5 = 10N」：相加對了，但多除了質量，算出來的是加速度。回饋說多算了一步，不說出答案 50。
+it('2-6 同方向的合力：答案 50 N；真的答過的 10 有「多算了一步」的回饋（再 ÷ 質量是加速度），不說出答案，答錯後有引導', () => {
+  const step = findStep('2-6', 'same-direction-net');
+  if (step?.kind !== 'number') throw new Error('same-direction-net 不是數字題');
+  expect(step.answer).toBe(50);
+  expect(step.unit).toBe('N');
+  const feedback = step.wrongAnswers?.find((wrong) => wrong.value === 10)?.feedback ?? '';
+  expect(feedback).toContain('多算了一步');
+  expect(feedback).toContain('算到 N 就停');
+  expect(feedback).toContain('加速度');
+  expect(mentionsNumber(feedback, 50)).toBe(false);
+  expect(step.guide?.length ?? 0).toBeGreaterThan(0);
+});
+
+// F = m × a 的 F 是合力：只用一個人的力、把反方向的力相加都不對；少了括號、碰巧算出 2 的 30 ÷ (20 − 5) 也要有回饋。
+it('2-6 opposite-accel：(30 − 20) ÷ 5 算對；只用一個人的力、反方向相加、少了括號、碰巧算對的 30 ÷ (20 − 5) 都是錯的，有回饋', () => {
+  const step = findStep('2-6', 'opposite-accel');
+  if (step?.kind !== 'formula') throw new Error('opposite-accel 不是拼算式');
+  // 有標示的磚塊寫成「數值|標示」
+  const right = '30|小明往右';
+  const left = '20|小華往左';
+  const mass = '5|質量';
+  expect(sameFormula(step.accepted[0], ['(', right, '−', left, ')', '÷', mass])).toBe(true);
+  for (const formula of [
+    [right, '÷', mass],
+    ['(', right, '+', left, ')', '÷', mass],
+    [right, '−', left, '÷', mass],
+    [right, '÷', '(', left, '−', mass, ')'],
+  ]) {
+    expect(checkFormula(step, formula), formula.join(' ')).toMatchObject({ correct: false, feedback: expect.stringMatching(/\S/) });
+  }
+});
+
+it('2-6 的購物車題都說明沒有摩擦力；單位配對是距離、速度、加速度、力、質量五對', () => {
+  for (const id of ['which-way', 'opposite-net', 'opposite-accel', 'same-direction-net', 'ten-unit']) {
+    const step = findStep('2-6', id);
+    expect(step && 'prompt' in step ? step.prompt : '', id).toContain('沒有摩擦力');
+  }
+  const match = findStep('2-6', 'unit-match');
+  expect(match?.kind === 'match' && match.pairs).toEqual([
+    { left: '距離', right: '公尺' },
+    { left: '速度', right: '公尺/秒' },
+    { left: '加速度', right: '公尺/秒²' },
+    { left: '力', right: 'N' },
+    { left: '質量', right: '公斤' },
+  ]);
+});
+
 it('第 2 站複習 bus-brake-size：質量 × 加速度大小算對（× 可以對調）；用了地球 g 是錯的，有回饋', () => {
   const step = reviewOf(2)?.steps.find((s) => s.id === 'bus-brake-size');
   if (step?.kind !== 'formula') throw new Error('bus-brake-size 不是拼算式');
