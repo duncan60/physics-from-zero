@@ -241,8 +241,8 @@ it('有 7 站，id 和標題依照 spec 的順序', () => {
   expect(stations.map((s) => s.title)).toEqual(['運動', '力與牛頓定律', '能量與動量', '波動、聲音與熱', '電與磁', '光', '近代物理']);
 });
 
-it('第 1 站至少有 1-1～1-5，依序排在最前面', () => {
-  expect(stations[0].lessons.map((l) => l.id).slice(0, 5)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5']);
+it('第 1 站至少有 1-1～1-6，依序排在最前面', () => {
+  expect(stations[0].lessons.map((l) => l.id).slice(0, 6)).toEqual(['1-1', '1-2', '1-3', '1-4', '1-5', '1-6']);
 });
 
 it('第 2 站至少有 2-1～2-4，依序排在最前面', () => {
@@ -255,8 +255,8 @@ it('每一站的課程 id 都是「站號-課號」，課號從 1 開始連續�
   }
 });
 
-it('第 1 站的課程標題（前 5 課）', () => {
-  expect(stations[0].lessons.slice(0, 5).map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高']);
+it('第 1 站的課程標題（前 6 課）', () => {
+  expect(stations[0].lessons.slice(0, 6).map((l) => l.title)).toEqual(['慣性', '速度與位置', '加速度', '往上丟的球', '球飛了多高', '速度–時間圖']);
 });
 
 it('第 2 站的課程標題（前 4 課）', () => {
@@ -451,6 +451,65 @@ it('1-5 scooter-average 的引導：題目和說明寫的是同一個順序 (6 +
   expect(count.prompt).toContain('(6 + 18)');
   expect(count.explanation).toContain('(6 + 18)');
   expect(`${count.prompt}${count.explanation}`).not.toContain('(18 + 6)');
+});
+
+// 1-6：上課時真的答了「10、10」：等速 10 公尺/秒的平線，斜率和加速度都答成線的高度（速度）。回饋只說方向，不說出答案 0。
+it('1-6 flat-line：高度 10 的平線，加速度答案 0；真的答過的 10 有回饋（10 是線的高度、速度大不代表加速度大），不說出答案，答錯後有引導', () => {
+  const step = findStep('1-6', 'flat-line');
+  if (step?.kind !== 'number') throw new Error('flat-line 不是數字題');
+  expect(step.answer).toBe(0);
+  expect(step.unit).toBe('公尺/秒²');
+  const points = step.graph?.lines[0]?.points ?? [];
+  expect(points.length).toBeGreaterThanOrEqual(2);
+  for (const [, v] of points) expect(v).toBe(10);
+  const feedback = step.wrongAnswers?.find((wrong) => wrong.value === 10)?.feedback ?? '';
+  expect(feedback).toContain('線的高度');
+  expect(feedback).toContain('變了');
+  expect(feedback).toContain('速度大，不代表加速度大');
+  expect(feedback).not.toMatch(/(斜率|加速度)(就)?是 ?0(?![0-9.])|= 0(?![0-9.])/);
+  expect(step.guide?.length ?? 0).toBeGreaterThan(0);
+});
+
+// 上課時表格第二行的高是另一個數，學習者抄了第一行的高（寫成 2*10 = 20）。同樣的結構：第一行已填好，第二行的高不一樣，
+// 抄第一行的高算出來的數字是錯的。表格題沒有針對單一答案的回饋，所以答錯後的引導先問「高要用哪一個數」，對抄來的高有回饋。
+it('1-6 frame-table：第一行已填好、第二行的高不一樣；抄第一行的高算出來是錯的，引導對抄來的高有回饋，不說出答案', () => {
+  const step = findStep('1-6', 'frame-table');
+  if (step?.kind !== 'table') throw new Error('frame-table 不是表格題');
+  const [first, second] = step.rows;
+  expect(first.cells.every((cell) => typeof cell === 'string'), '第一行要全部填好').toBe(true);
+  const [width, height] = second.cells.slice(0, 2).map(Number);
+  const firstHeight = Number(first.cells[1]);
+  expect(height).not.toBe(firstHeight);
+  const blanks = blankCells(step);
+  expect(blanks).toHaveLength(1);
+  expect(blanks[0]).toMatchObject({ row: 1, answer: width * height });
+  const copied = width * firstHeight;
+  expect(copied).not.toBe(width * height);
+
+  const guide = step.guide?.[0];
+  if (guide?.kind !== 'number') throw new Error('frame-table 的引導第一步不是數字題');
+  expect(guide.answer).toBe(height);
+  const feedback = guide.wrongAnswers?.find((wrong) => wrong.value === firstHeight)?.feedback ?? '';
+  expect(feedback).toContain('第一行');
+  expect(feedback).toContain('第二行自己的高');
+  for (const text of [feedback, guide.prompt, guide.explanation]) expect(mentionsNumber(text, width * height), text).toBe(false);
+  expect(guide.wrongAnswers?.some((wrong) => wrong.value === copied)).toBe(true);
+});
+
+// 「÷ 2 從哪裡來」：陷阱選項「因為時間剛好是 2 秒」要留著，例子也剛好 2 秒；回饋呼應 1-5 的 ÷ 3（3 秒也是 ÷ 2），不說出答案。
+it('1-6 where-half：÷ 2 是因為三角形是長方形的一半；「因為時間剛好是 2 秒」的回饋說 3 秒也是 ÷ 2、呼應 1-5 的 ÷ 3，不說出答案', () => {
+  const step = findStep('1-6', 'where-half');
+  if (step?.kind !== 'choice') throw new Error('where-half 不是選擇題');
+  expect(step.options.find((o) => o.id === step.answer)?.label).toBe('因為三角形是長方形的一半');
+  const points = step.graph?.lines[0]?.points ?? [];
+  expect(points[0]).toEqual([0, 0]);
+  expect(points[points.length - 1]?.[0], '例子要剛好 2 秒').toBe(2);
+  const trap = step.options.find((o) => o.label === '因為時間剛好是 2 秒');
+  const feedback = trap?.feedback ?? '';
+  expect(feedback).toContain('3 秒');
+  expect(feedback).toContain('不是 ÷ 3');
+  expect(feedback).toContain('1-5');
+  expect(feedback).not.toContain('一半');
 });
 
 // 質量是 1 公斤，1.6 ÷ 1 和只放 1.6 算出來碰巧也是 1.6，但不是 W = m × g，要給回饋而不是算對。
