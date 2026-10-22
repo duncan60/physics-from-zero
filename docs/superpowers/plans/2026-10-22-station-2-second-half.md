@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 把家教紀錄的 2-5～2-7 做成三課，更新第 2 站的重點與複習，順手修掉 `[hidden]` 被蓋掉的問題。
+**Goal:** 把家教紀錄的 2-5～2-7 做成三課，更新第 2 站的重點與複習，順手修掉 `[hidden]` 被蓋掉的問題；追加速度–時間圖（畫面）與 1-6 課。
 
 **Architecture:** 課程是 `src/content/lessons/` 底下的獨立檔案，自動讀取，不用改畫面程式碼或 `stations.ts`。複習在 `src/content/reviews/2-force.ts`。內容檢查在 `src/content/content.test.ts`，每課完整玩一遍的整合測試在 `src/App.lessons.test.tsx`，新課會自動被涵蓋。
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 繁體中文（台灣）、不用 emoji；360px 不得水平捲軸；淺色深色；尊重減少動態效果。
-- 不加執行期依賴；不改一般進度與課內存檔的格式與版本；不改畫面程式碼（Task 4 的一條 CSS 除外）。
+- 不加執行期依賴；不改一般進度與課內存檔的格式與版本；不改畫面程式碼（Task 4 的一條 CSS、Task 5 的速度–時間圖除外）。
 - 內容規則照 README「新增一課」與 `content.test.ts`；g 寫「g 約 9.8，這裡取 10」，之後用 10。
 - 每一課的資料來源只有 `.superpowers/tutoring-log.md` 的對應段落（唯讀，不能修改）；那一段的「上課時不夠精確的說法」照紀錄修正後才寫進課程。
 - Vitest 不開 globals；commit 訊息用繁體中文、前綴 `content:` 或 `fix:`，結尾加 `Co-Authored-By: Claude <model> <noreply@anthropic.com>`；不 push；不碰 `.claude/`、`.superpowers/`（除了讀家教紀錄）；不要結束任何不是你啟動的程序。
@@ -65,3 +65,29 @@
 - `src/styles.css` 開頭的基本樣式區加 `[hidden] { display: none !important; }`，附一行註解說明為什麼（`display: flex` 的元素加了 `hidden` 仍會顯示）。加一個測試：讀 `src/styles.css` 的文字，確認有這條規則（jsdom 不套用樣式表，用文字檢查鎖住）。
 - 驗證：`npm test` 全過、`npm run build` 通過。
 - Commit：`content: 第 2 站重點與複習涵蓋 2-5～2-7` 與 `fix: 有 hidden 屬性的元素一定不顯示`（兩個 commit）。
+
+### Task 5：速度–時間圖（畫面）
+
+**Files:** Modify `src/lib/types.ts`；Create `src/components/steps/VtGraphView.tsx` 與測試；Modify `src/components/steps/ConceptView.tsx`、`src/components/QuestionCard.tsx`（或實際顯示題目文字的地方）、`src/styles.css`、`src/content/content.test.ts`、`README.md`
+
+**Interfaces（Task 6 會用）：**
+```ts
+export interface VtLine { points: [number, number][]; label?: string; shadeBelow?: boolean }
+export interface VtGraph { tMax: number; vMax: number; vStep: number; lines: VtLine[]; box?: { t: number; v: number }; caption: string }
+// ConceptStep、ChoiceStep、NumberStep、TableStep 加可選的 graph?: VtGraph
+```
+
+- 照 spec「追加 → 速度–時間圖（畫面）」。
+- 測試（元件）：有 `role="img"` 且名稱是 caption；每條線畫一條折線、點的數目對；`shadeBelow` 時有塗色區域、沒有時沒有；有 `box` 時有虛線長方形；觀念卡、選擇題、數字題、表格題帶 `graph` 時都會顯示圖，不帶時不顯示。
+- 內容檢查：spec 列的範圍與排序規則，套用在所有課程與複習（含引導）裡的 `graph`；寫一個壞的圖確認檢查函式會擋（點超出範圍、時間沒有遞增）。
+- 驗證：`npm test`、`npm run build` 通過。
+- Commit：`feat: 速度–時間圖，觀念卡和題目可以帶一張圖`
+
+### Task 6：1-6 速度–時間圖與第 1 站複習
+
+**Files:** Create `src/content/lessons/1-6-speed-time-graph.ts`；Modify `src/content/reviews/1-motion.ts`、`src/content/content.test.ts`（如需要）
+
+- 照 spec「追加 → 1-6」與「第 1 站的重點與複習」。資料來源是家教紀錄「2-8 速度–時間圖」一段。
+- 小測試鎖住「10、10」那一題對 10 的回饋，和表格題抄第一行那個錯誤答案的回饋。
+- 驗證：`npm test`、`npm run build` 通過。
+- Commit：`content: 第 1-6 課「速度–時間圖」` 與 `content: 第 1 站複習加入速度–時間圖`
