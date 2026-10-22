@@ -60,6 +60,9 @@
   --sim-danger: #c62828;
   --sim-ball: #ea580c;
 
+  /* 速度–時間圖（steps/VtGraphView.tsx）線底下塗色的濃淡：顏色跟著線，深色模式的線比較淺，要濃一點才看得出來 */
+  --vt-shade-opacity: 0.2;
+
   --radius: 14px;
   --content-width: 560px;
   --gutter: 16px;
@@ -128,6 +131,8 @@
 
     --sim-danger: #c62828;
     --sim-ball: #fb923c;
+
+    --vt-shade-opacity: 0.32;
   }
 }
 
@@ -2096,6 +2101,97 @@ a.path-node:active .path-node-circle {
 
 .lp-cart-anim--play .lp-cart {
   animation: lp-cart-go 1.6s cubic-bezier(0.11, 0, 0.5, 0) 0.2s both;
+}
+
+/* ---- 速度–時間圖（components/steps/VtGraphView.tsx）：靜態的圖，顏色都用變數，淺色、深色模式都看得清楚 ---- */
+
+/* 寬度跟著卡片，最寬 400px；viewBox 讓圖和字一起縮放，360px 的手機上也不會有水平捲軸 */
+.lp-vt {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin: 4px auto 16px;
+}
+
+.lp-vt-grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.lp-vt-axis {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
+.lp-vt-ticks line {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.lp-vt-tick,
+.lp-vt-axis-label,
+.lp-vt-label {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.lp-vt-tick {
+  fill: var(--text-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-vt-axis-label {
+  fill: var(--text);
+  font-weight: 700;
+}
+
+/* 說明三角形是長方形的一半時用的虛線長方形 */
+.lp-vt-box {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+}
+
+/* 每條線一種顏色（線、點、標籤、塗色都跟著 currentColor）；不只靠顏色分辨，線旁邊寫標籤 */
+.lp-vt-c0 {
+  color: var(--info);
+}
+
+.lp-vt-c1 {
+  color: var(--primary-text);
+}
+
+.lp-vt-c2 {
+  color: var(--combo-text);
+}
+
+.lp-vt-shade {
+  fill: currentColor;
+  fill-opacity: var(--vt-shade-opacity);
+  stroke: none;
+}
+
+.lp-vt-line polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lp-vt-line circle {
+  fill: currentColor;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.lp-vt-label {
+  fill: currentColor;
+  font-weight: 700;
 }
 
 /* ---- 配對 ---- */

@@ -3,7 +3,7 @@ import { blankCells } from '../lib/answer';
 import { acceptedNote, checkFormula, evaluateFormula, formulaTiles, parseFormula, sameFormula } from '../lib/formula';
 import { isLessonUnlocked } from '../lib/progress';
 import { checkSlider } from '../lib/slider';
-import type { ChoiceStep, ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview } from '../lib/types';
+import type { ChoiceStep, ConceptStep, FormulaStep, GuideStep, Lesson, MatchStep, NumberStep, QuestionStep, SliderStep, Step, StationReview, VtGraph } from '../lib/types';
 import { findLesson, isLastLessonOfStation, orderedLessonIds, reviewAsLesson, reviewLessonId, reviewOf, reviewStationOf, stationOf, stations } from './stations';
 
 const lessons = stations.flatMap((s) => s.lessons);
@@ -873,6 +873,113 @@ describe('選擇題位置與長度的檢查', () => {
   });
 });
 
+// ---- 速度–時間圖：觀念卡、選擇題、數字題、表格題可以帶一張（graph），引導裡的也一樣 ----
+
+/**
+ * 一張速度–時間圖有什麼問題，沒有問題時是空陣列：
+ * tMax、vMax、vStep 都要大於 0；至少一條線，每條線至少 2 個點、時間嚴格遞增，每個點都在 0～tMax 秒、0～vMax 公尺/秒以內；
+ * 線的標籤（有的話）不能是空白；虛線長方形（有的話）的 t、v 都大於 0、不超過 tMax、vMax；caption 不能是空的。
+ */
+function vtGraphProblems(id: string, g: VtGraph): string[] {
+  const problems: string[] = [];
+  for (const [name, value] of [['tMax', g.tMax], ['vMax', g.vMax], ['vStep', g.vStep]] as const) {
+    if (!(Number.isFinite(value) && value > 0)) problems.push(`${id}：${name} 要大於 0（現在是 ${value}）`);
+  }
+  const inT = (t: number): boolean => Number.isFinite(t) && t >= 0 && t <= g.tMax;
+  const inV = (v: number): boolean => Number.isFinite(v) && v >= 0 && v <= g.vMax;
+  const range = `0～${g.tMax} 秒、0～${g.vMax} 公尺/秒`;
+  if (g.lines.length === 0) problems.push(`${id}：圖上沒有線`);
+  for (const [i, line] of g.lines.entries()) {
+    const where = `${id}：第 ${i + 1} 條線`;
+    if (line.points.length < 2) problems.push(`${where}只有 ${line.points.length} 個點，至少要 2 個`);
+    for (const [j, [t, v]] of line.points.entries()) {
+      if (!inT(t) || !inV(v)) problems.push(`${where}的點 (${t}, ${v}) 超出 ${range}`);
+      if (j > 0 && !(t > line.points[j - 1][0])) problems.push(`${where}的時間沒有遞增：${line.points[j - 1][0]} 秒之後是 ${t} 秒`);
+    }
+    if (line.label !== undefined && line.label.trim() === '') problems.push(`${where}的標籤是空白`);
+  }
+  if (g.box !== undefined) {
+    const { t, v } = g.box;
+    if (!(inT(t) && t > 0 && inV(v) && v > 0)) problems.push(`${id}：虛線長方形 (${t}, ${v}) 要在 ${range} 以內，t、v 都大於 0`);
+  }
+  if (g.caption.trim() === '') problems.push(`${id}：caption 是空的`);
+  return problems;
+}
+
+/** 這一課裡每一張速度–時間圖：[步驟 id, 圖]，包含引導裡的步驟。 */
+function graphsOf(lesson: Lesson): [string, VtGraph][] {
+  return withGuides(lesson).flatMap((s): [string, VtGraph][] => ('graph' in s && s.graph !== undefined ? [[s.id, s.graph]] : []));
+}
+
+describe('vtGraphProblems（速度–時間圖的內容檢查）', () => {
+  const good: VtGraph = {
+    tMax: 3,
+    vMax: 10,
+    vStep: 2,
+    lines: [
+      { points: [[0, 0], [2, 10]], label: '加速', shadeBelow: true },
+      { points: [[0, 6], [3, 6]] },
+    ],
+    box: { t: 2, v: 10 },
+    caption: '一條線從 0 升到 10，另一條一直是 6。',
+  };
+  const withLine = (points: [number, number][]): VtGraph => ({ ...good, lines: [{ points }] });
+
+  it('範圍內、時間遞增、有 caption：沒問題（點剛好在軸的兩端也可以）', () => {
+    expect(vtGraphProblems('demo', good)).toEqual([]);
+    expect(vtGraphProblems('demo', withLine([[0, 0], [3, 10]]))).toEqual([]);
+  });
+  it('點超出範圍：時間超過 tMax、速度超過 vMax、負的都不行', () => {
+    expect(vtGraphProblems('demo', withLine([[0, 0], [4, 10]]))).toHaveLength(1);
+    expect(vtGraphProblems('demo', withLine([[0, 0], [2, 12]]))).toHaveLength(1);
+    expect(vtGraphProblems('demo', withLine([[0, -2], [2, 10]]))).toHaveLength(1);
+    expect(vtGraphProblems('demo', withLine([[-1, 0], [2, 10]]))).toHaveLength(1);
+  });
+  it('時間沒有遞增：倒退、或兩個點同一秒都不行', () => {
+    expect(vtGraphProblems('demo', withLine([[2, 10], [0, 0]]))).toHaveLength(1);
+    expect(vtGraphProblems('demo', withLine([[0, 0], [1, 5], [1, 8]]))).toHaveLength(1);
+  });
+  it('每條線至少 2 個點，至少要有一條線', () => {
+    expect(vtGraphProblems('demo', withLine([[1, 5]]))).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, lines: [] })).toHaveLength(1);
+  });
+  it('tMax、vMax、vStep 都要大於 0', () => {
+    expect(vtGraphProblems('demo', { ...good, vStep: 0 })).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, vStep: -2 })).toHaveLength(1);
+    // vMax、tMax 不大於 0 時，原本範圍內的點也跟著超出範圍，所以不只一個問題
+    expect(vtGraphProblems('demo', { ...good, vMax: 0 }).join('\n')).toContain('vMax 要大於 0');
+    expect(vtGraphProblems('demo', { ...good, tMax: 0 }).join('\n')).toContain('tMax 要大於 0');
+  });
+  it('虛線長方形要在範圍內，t、v 都大於 0', () => {
+    expect(vtGraphProblems('demo', { ...good, box: { t: 4, v: 10 } })).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, box: { t: 2, v: 11 } })).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, box: { t: 0, v: 10 } })).toHaveLength(1);
+  });
+  it('caption 和線的標籤不能是空白', () => {
+    expect(vtGraphProblems('demo', { ...good, caption: ' ' })).toHaveLength(1);
+    expect(vtGraphProblems('demo', { ...good, lines: [{ points: [[0, 0], [2, 10]], label: '' }] })).toHaveLength(1);
+  });
+  it('graphsOf 找得到主步驟和引導裡的圖', () => {
+    const lesson: Lesson = {
+      id: 'demo',
+      title: '示範',
+      steps: [
+        { kind: 'concept', id: 'look', body: ['看圖。'], graph: good },
+        {
+          kind: 'choice',
+          id: 'ask',
+          prompt: '哪一條？',
+          options: [{ id: 'a', label: '甲' }, { id: 'b', label: '乙' }],
+          answer: 'a',
+          explanation: '甲。',
+          guide: [{ kind: 'number', id: 'ask-guide', prompt: '多高？', answer: 6, explanation: '6。', graph: withLine([[0, 6], [3, 6]]) }],
+        },
+      ],
+    };
+    expect(graphsOf(lesson).map(([id]) => id)).toEqual(['look', 'ask-guide']);
+  });
+});
+
 /** 每一課都要通過的內容檢查。每站的複習包裝成一課（reviewAsLesson）之後，也套用同一套。 */
 function lessonContentChecks(lesson: Lesson): void {
   it('5 到 8 個步驟', () => {
@@ -924,6 +1031,10 @@ function lessonContentChecks(lesson: Lesson): void {
 
   it('沒有 emoji', () => {
     expect(JSON.stringify(lesson)).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+
+  it('速度–時間圖（含引導裡的）：點在軸的範圍內、時間遞增、每條至少 2 點，虛線長方形在範圍內，caption 不是空的', () => {
+    for (const [id, graph] of graphsOf(lesson)) expect(vtGraphProblems(id, graph)).toEqual([]);
   });
 
   describe('選擇題的正確答案不能靠位置或長度猜到', () => {

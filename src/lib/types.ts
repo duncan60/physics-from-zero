@@ -1,11 +1,21 @@
-export interface ConceptStep { kind: 'concept'; id: string; title?: string; body: string[] }
+/**
+ * 速度–時間圖（components/steps/VtGraphView）：時間軸 0～tMax 秒（每 1 秒一格）、速度軸 0～vMax 公尺/秒（每 vStep 一格）。
+ * lines：一條或多條折線，每條是依時間嚴格遞增的 [秒, 公尺/秒] 點（至少 2 個），label 是寫在線旁邊的短標籤，
+ * shadeBelow 把線底下到時間軸的面積塗色。box：從 (0, 0) 到 (t, v) 的虛線長方形（說明三角形是長方形的一半時用）。
+ * caption：給螢幕閱讀器念的文字說明（畫面上不顯示），描述圖上有什麼（例如每個點的數值），不能洩漏題目的答案。
+ * 範圍與排序由 content.test.ts 檢查。
+ */
+export interface VtLine { points: [number, number][]; label?: string; shadeBelow?: boolean }
+export interface VtGraph { tMax: number; vMax: number; vStep: number; lines: VtLine[]; box?: { t: number; v: number }; caption: string }
+// 觀念卡、選擇題、數字題、表格題可以帶一張速度–時間圖（graph），畫在內文或題目文字下面、繼續按鈕或作答區上面；引導裡的步驟也一樣。
+export interface ConceptStep { kind: 'concept'; id: string; title?: string; body: string[]; graph?: VtGraph }
 export interface ChoiceOption { id: string; label: string; feedback?: string }
-export interface ChoiceStep { kind: 'choice'; id: string; prompt: string; options: ChoiceOption[]; answer: string; explanation: string; guide?: GuideStep[] }
+export interface ChoiceStep { kind: 'choice'; id: string; prompt: string; options: ChoiceOption[]; answer: string; explanation: string; guide?: GuideStep[]; graph?: VtGraph }
 export interface WrongAnswer { value: number; feedback: string }
-export interface NumberStep { kind: 'number'; id: string; prompt: string; answer: number; tolerance?: number; unit?: string; wrongAnswers?: WrongAnswer[]; explanation: string; guide?: GuideStep[] }
+export interface NumberStep { kind: 'number'; id: string; prompt: string; answer: number; tolerance?: number; unit?: string; wrongAnswers?: WrongAnswer[]; explanation: string; guide?: GuideStep[]; graph?: VtGraph }
 export type TableCell = string | { answer: number; tolerance?: number };
 export interface TableRow { label: string; cells: TableCell[] }
-export interface TableStep { kind: 'table'; id: string; prompt: string; columns: string[]; rows: TableRow[]; explanation: string; guide?: GuideStep[] }
+export interface TableStep { kind: 'table'; id: string; prompt: string; columns: string[]; rows: TableRow[]; explanation: string; guide?: GuideStep[]; graph?: VtGraph }
 export interface SimStep { kind: 'sim'; id: string; sim: 'bus-ball'; prompt: string }
 export interface FormulaWrongForm { tokens: string[]; feedback: string }
 // 算對、但寫法比正式寫法省略了什麼（例如省略 + 0）：tokens 要是 accepted 裡的某一種寫法（不是第一個），note 是算式下面一則中性的「提醒」（算式拼對、進到第 2 步時就出現），輕輕說明正式寫法。

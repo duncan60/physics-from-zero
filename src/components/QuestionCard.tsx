@@ -10,6 +10,7 @@ import { FormulaInput, shownFormula, spokenFormula } from './steps/FormulaInput'
 import { NumberInput } from './steps/NumberInput';
 import { SliderInput } from './steps/SliderInput';
 import { TableInput } from './steps/TableInput';
+import { VtGraphView } from './steps/VtGraphView';
 import { useActionGuard } from './useActionGuard';
 
 // answering：作答中；correct：答對了；wrong：還不對；revealed：看了解答。
@@ -387,12 +388,15 @@ export function QuestionCard(props: {
   else primary = { label: '再試一次', action: retry };
 
   const solution = solutionLines(step);
+  // 選擇題、數字題、表格題可以帶一張速度–時間圖，畫在題目文字下面、作答區上面。
+  const graph = 'graph' in step ? step.graph : undefined;
 
   return (
     <section className={`lp-card lp-card--${step.kind} lp-card--${phase}`}>
       <p id={promptId} className="lp-prompt">
         {step.prompt}
       </p>
+      {graph !== undefined && <VtGraphView graph={graph} />}
       <div ref={answerRef} className="lp-answer">
         {renderAnswer()}
       </div>
