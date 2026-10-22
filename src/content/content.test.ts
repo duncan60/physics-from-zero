@@ -567,6 +567,36 @@ it('2-6 的購物車題都說明沒有摩擦力；單位配對是距離、速度
   ]);
 });
 
+// 上課時真的答了「不同東西上？」：只看到一樣大、方向相反，就以為重力和正向力是作用力與反作用力。
+// 回饋先分清楚誰施力、作用在誰身上，不說出答案（同一個東西上）。
+it('2-7 acts-on：重力和正向力作用在同一個東西上；以為是作用力與反作用力的選項有回饋（誰施力、作用在誰身上），不說出答案，答錯後有引導', () => {
+  const step = findStep('2-7', 'acts-on');
+  if (step?.kind !== 'choice') throw new Error('acts-on 不是選擇題');
+  expect(step.answer).toBe('same-object');
+  const option = step.options.find((o) => o.id === 'action-reaction');
+  expect(option?.label).toContain('不同的東西');
+  const feedback = option?.feedback ?? '';
+  expect(feedback).toContain('誰施力');
+  expect(feedback).toContain('作用在誰身上');
+  expect(feedback).not.toContain('同一個東西');
+  expect(step.guide?.length ?? 0).toBeGreaterThan(0);
+});
+
+// 上課時真的答了「阻力、手、往上」。回饋不把阻力寫成定義，也不直接說出是桌子；正向力 = 重力只寫成「這一題」。
+it('2-7 upward-force 的「阻力」選項有回饋，不說出答案也不下阻力的定義；normal-size 說明寫「這一題」正向力和重力一樣大', () => {
+  const step = findStep('2-7', 'upward-force');
+  if (step?.kind !== 'choice') throw new Error('upward-force 不是選擇題');
+  expect(step.answer).toBe('table');
+  const feedback = step.options.find((o) => o.id === 'drag')?.feedback ?? '';
+  expect(feedback).toContain('不叫阻力');
+  expect(feedback).not.toContain('桌子');
+  expect(JSON.stringify(findLesson('2-7'))).not.toMatch(/阻力(就)?是/);
+  const size = findStep('2-7', 'normal-size');
+  if (size?.kind !== 'number') throw new Error('normal-size 不是數字題');
+  expect(size.answer).toBe(10);
+  expect(size.explanation).toContain('這一題正向力和重力一樣大');
+});
+
 it('第 2 站複習 bus-brake-size：質量 × 加速度大小算對（× 可以對調）；用了地球 g 是錯的，有回饋', () => {
   const step = reviewOf(2)?.steps.find((s) => s.id === 'bus-brake-size');
   if (step?.kind !== 'formula') throw new Error('bus-brake-size 不是拼算式');
