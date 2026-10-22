@@ -1270,6 +1270,31 @@ it('第 1 站複習：「距離 = 平均速度 × 時間」那一列的名稱說
   expect(row?.name).toContain('平均地變化');
 });
 
+// 第 1 站複習涵蓋 1-6：公式、陷阱（上課時真的答過的「10、10」），加上一題帶速度–時間圖的混合題。線底下的面積 = 走了多遠，條件要留著。
+it('第 1 站複習涵蓋 1-6：速度–時間圖的公式（斜率 = 加速度、線底下的面積 = 走了多遠）、把線的高度當成斜率的陷阱、一題帶圖的混合題', () => {
+  const review = reviewOf(1);
+  const row = review?.formulas.find((f) => f.name.includes('速度–時間圖'));
+  expect(row?.formula).toContain('斜率 = 加速度');
+  expect(row?.formula).toContain('線底下的面積 = 走了多遠');
+  expect(row?.formula).toContain('一路往同一個方向');
+  const trap = review?.traps.find((t) => t.wrong.includes('平線'));
+  expect(trap?.wrong).toContain('都是 10');
+  expect(trap?.right).toContain('線的高度');
+  expect(trap?.right).toContain('速度大，不代表加速度大');
+
+  const step = review?.steps.find((s) => s.id === 'car-scooter-graph');
+  if (step?.kind !== 'number') throw new Error('car-scooter-graph 不是數字題');
+  expect(step.graph?.lines).toHaveLength(2);
+  expect(step.answer).toBe(16);
+  // 只算了機車（24）、只算了汽車（40）、把機車當成整整 4 秒都是 12（8）：都有回饋，不說出答案
+  for (const value of [24, 40, 8]) {
+    const feedback = step.wrongAnswers?.find((wrong) => wrong.value === value)?.feedback ?? '';
+    expect(feedback, String(value)).toMatch(/\S/);
+    expect(mentionsNumber(feedback, 16), String(value)).toBe(false);
+  }
+  expect(mentionsNumber(step.graph?.caption ?? '', 16)).toBe(false);
+});
+
 // ---- 外部回饋的物理措辭：F = m × a 的 F 是合力、算式題假設沒有摩擦力、g 約 9.8 取 10、平均速度先下定義、速率 ----
 
 /** 主步驟裡的觀念卡內文（接成一個字串）；找不到或不是觀念卡就丟錯。 */
